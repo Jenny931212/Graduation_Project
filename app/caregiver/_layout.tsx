@@ -6,7 +6,13 @@ import { Alert, Linking, Pressable, StyleSheet, Text, View } from "react-native"
 
 export default function CaregiverLayout() {
   const segments = useSegments() as string[];
-  const isChatRoom = segments[segments.length - 1] === "chat-room";
+  
+  // 💡 取得目前所在的最後一個路徑名稱
+  const currentRoute = segments[segments.length - 1];
+
+  // 💡 將需要「隱藏底部導覽列」的頁面統整成一個陣列 (加入 video-record)
+  const hideFooterRoutes = ["chat-room", "video-record"];
+  const shouldHideFooter = hideFooterRoutes.includes(currentRoute);
 
   const activeCareTarget = useActiveCareTarget();
   const activePatientId =
@@ -88,7 +94,8 @@ export default function CaregiverLayout() {
         <Stack screenOptions={{ headerShown: false, gestureEnabled: false }} />
       </View>
 
-      {!isChatRoom && (
+      {/* 💡 只有在「不需要隱藏」的頁面時，才渲染這塊客製化導覽列 */}
+      {!shouldHideFooter && (
         <View style={styles.footerWrapper}>
           <View style={styles.fabContainer}>
             <Pressable style={styles.fabButton} onPress={onEmergencyCall}>
