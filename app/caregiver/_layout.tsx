@@ -1,5 +1,6 @@
 import { auth, db } from "@/firebase/firebaseConfig";
 import { useActiveCareTarget } from "@/src/care-target/useActiveCareTarget";
+import { useLanguage } from "@/src/store/LanguageContext";
 import { Ionicons } from "@expo/vector-icons";
 import { Stack, router, useSegments } from "expo-router";
 import { signOut } from "firebase/auth";
@@ -15,6 +16,7 @@ export default function CaregiverLayout() {
   const segments = useSegments() as string[];
   const currentPage = segments[segments.length - 1];
   const insets = useSafeAreaInsets();
+  const { language, setLanguage } = useLanguage();
 
   const hideBottomNavRoutes = [
     "chat-room",
@@ -128,6 +130,11 @@ export default function CaregiverLayout() {
     ]);
   };
 
+  const changeLanguage = (nextLanguage: "zh" | "en" | "vi" | "id") => {
+    setLanguage(nextLanguage);
+    setIsSidebarOpen(false);
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.content}>
@@ -191,9 +198,31 @@ export default function CaregiverLayout() {
         </View>
 
         <View style={styles.menuContainer}>
-          <Pressable style={styles.menuItem} onPress={() => Alert.alert("提示", "語言切換開發中")}>
+          <View style={styles.menuItem}>
             <Text style={styles.menuItemText}>語言</Text>
-          </Pressable>
+            <View style={styles.languageOptions}>
+              <Pressable onPress={() => changeLanguage("zh")}>
+                <Text style={[styles.languageOption, language === "zh" && styles.languageOptionActive]}>
+                  中文
+                </Text>
+              </Pressable>
+              <Pressable onPress={() => changeLanguage("en")}>
+                <Text style={[styles.languageOption, language === "en" && styles.languageOptionActive]}>
+                  English
+                </Text>
+              </Pressable>
+              <Pressable onPress={() => changeLanguage("vi")}>
+                <Text style={[styles.languageOption, language === "vi" && styles.languageOptionActive]}>
+                  Tiếng Việt
+                </Text>
+              </Pressable>
+              <Pressable onPress={() => changeLanguage("id")}>
+                <Text style={[styles.languageOption, language === "id" && styles.languageOptionActive]}>
+                  Bahasa Indonesia
+                </Text>
+              </Pressable>
+            </View>
+          </View>
           <Pressable style={styles.menuItem} onPress={() => Alert.alert("提示", "記事本開發中")}>
             <Text style={styles.menuItemText}>記事本</Text>
           </Pressable>
@@ -319,6 +348,18 @@ const styles = StyleSheet.create({
     color: "#000",
     fontSize: 19,
     fontWeight: "bold",
+  },
+  languageOptions: {
+    marginTop: 10,
+    gap: 8,
+  },
+  languageOption: {
+    color: "#555",
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  languageOptionActive: {
+    color: "#007AFF",
   },
   menuItemTextDanger: {
     color: "#E33B3B",

@@ -4,11 +4,15 @@ import { router, useLocalSearchParams, useFocusEffect, Tabs } from "expo-router"
 import { doc, getDoc, collection, getDocs, query } from "firebase/firestore";
 import { db } from "@/firebase/firebaseConfig";
 import { useAuthContext } from "@/src/auth/AuthProvider";
+import { pickLocalizedString, translations } from "@/src/i18n/translations";
+import { useLanguage } from "@/src/store/LanguageContext";
 import { Ionicons } from "@expo/vector-icons";
 
 export default function FamilyDetailScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
   const { ready } = useAuthContext();
+  const { language } = useLanguage();
+  const t = translations[language];
   const [p, setP] = useState<any | null>(null);
 
   const fetchData = useCallback(async () => {
@@ -26,13 +30,14 @@ export default function FamilyDetailScreen() {
           const raw = d.data() as any;
           const it = {
             ...raw,
-            drug_name: raw.drug_name_zh ?? raw.drug_name ?? raw.name ?? "",
+            drug_name: pickLocalizedString(raw, "drug_name", language, raw.name ?? ""),
             dosage: raw.dose ?? raw.dosage ?? "",
-            usage_zh: raw.usage_zh ?? raw.usage ?? "",
-            memo: raw.note_zh ?? raw.memo ?? raw.note ?? "",
+            usage_zh: pickLocalizedString(raw, "usage", language),
+            memo: pickLocalizedString(raw, "note", language),
           };
           return {
-            name: it.drug_name ?? it.name ?? "未命名藥品",
+            raw,
+            name: it.drug_name ?? it.name ?? t.unknownMedicine,
             dosage: it.dosage ?? it.dose ?? "",
             usage_zh: it.usage_zh ?? it.usage ?? "",
             memo: it.memo ?? it.note_zh ?? it.note ?? "",
@@ -47,7 +52,7 @@ export default function FamilyDetailScreen() {
     } catch (error) {
       console.error("讀取詳情失敗:", error);
     }
-  }, [id]);
+  }, [id, language, t.unknownMedicine]);
 
   useFocusEffect(
     useCallback(() => {
@@ -55,7 +60,7 @@ export default function FamilyDetailScreen() {
     }, [fetchData])
   );
 
-  if (!ready || !p) return <View style={styles.center}><Text>載入中…</Text></View>;
+  if (!ready || !p) return <View style={styles.center}><Text>{t.loading}</Text></View>;
 
   return (
     <View style={styles.container}>
@@ -64,16 +69,16 @@ export default function FamilyDetailScreen() {
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="chevron-back" size={28} color="#333" />
-          <Text style={styles.backText}>返回</Text>
+          <Text style={styles.backText}>{t.back}</Text>
         </Pressable>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.titleRow}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.mainTitle}>{p.title || "藥單詳情"}</Text>
+            <Text style={styles.mainTitle}>{p.title || t.prescriptionDetail}</Text>
             <Text style={styles.subInfo}>
-              紀錄日期：{p.createdAt?.seconds ? new Date(p.createdAt.seconds * 1000).toLocaleDateString() : "未知"}
+              {t.recordDate}：{p.createdAt?.seconds ? new Date(p.createdAt.seconds * 1000).toLocaleDateString() : t.unknown}
             </Text>
           </View>
           <Pressable 
@@ -83,7 +88,7 @@ export default function FamilyDetailScreen() {
             })} 
             style={styles.editBtn}
           >
-            <Text style={styles.editBtnText}>編輯</Text>
+            <Text style={styles.editBtnText}>{t.edit}</Text>
           </Pressable>
         </View>
 
@@ -96,18 +101,18 @@ export default function FamilyDetailScreen() {
         ) : (
           <View style={[styles.img, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#f5f5f5' }]}>
             <Ionicons name="image-outline" size={40} color="#ccc" />
-            <Text style={{ color: '#999', marginTop: 8 }}>無藥單照片</Text>
+            <Text style={{ color: '#999', marginTop: 8 }}>{t.noPrescriptionImage}</Text>
           </View>
         )}
 
-        <Text style={styles.sectionTitle}>藥品內容</Text>
+        <Text style={styles.sectionTitle}>{t.medicineContent}</Text>
         
         {p.items?.map((it: any, idx: number) => {
           // 💡 邏輯：將 usage_zh 以逗號拆分為「用法」與「時段」
           const usageString = it.usage_zh || "";
           const parts = usageString.includes(",") ? usageString.split(",") : [usageString, ""];
-          const method = parts[0] || "未設定";
-          const timeDetail = parts.slice(1).join(",") || "依醫囑服用";
+          const method = parts[0] || t.notSet;
+          const timeDetail = parts.slice(1).join(",") || t.asDirectedUsage;
 
           return (
             <View key={idx} style={styles.itemCard}>
@@ -116,23 +121,23 @@ export default function FamilyDetailScreen() {
               </View>
               
               <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>藥物劑量：</Text>
+                <Text style={styles.infoLabel}>{t.dosage}：</Text>
                 <Text style={styles.infoValue}>{it.dosage}</Text>
               </View>
 
               <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>使用方式：</Text>
+                <Text style={styles.infoLabel}>{t.method}：</Text>
                 <Text style={styles.infoValue}>{method}</Text>
               </View>
 
               <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>服用時段：</Text>
+                <Text style={styles.infoLabel}>{t.usageTime}：</Text>
                 <Text style={styles.infoValue}>{timeDetail}</Text>
               </View>
 
               {it.memo ? (
                 <View style={styles.noteBox}>
-                  <Text style={styles.noteText}>備註：{it.memo}</Text>
+                  <Text style={styles.noteText}>{t.note}：{it.memo}</Text>
                 </View>
               ) : null}
             </View>

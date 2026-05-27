@@ -14,9 +14,15 @@ import { router } from "expo-router";
 import { db } from "@/firebase/firebaseConfig";
 import { useAuth } from "@/src/auth/useAuth";
 import {
+  ensureFirestoreTranslations,
+  pickDynamicLocalizedString,
+} from "@/src/i18n/dynamicTranslation";
+import { translations } from "@/src/i18n/translations";
+import {
   NOTIFICATIONS_COLLECTION,
   type NotificationDocument,
 } from "@/src/notifications/notificationSchema";
+import { useLanguage } from "@/src/store/LanguageContext";
 
 type NotificationRow = NotificationDocument & {
   id: string;
@@ -24,6 +30,8 @@ type NotificationRow = NotificationDocument & {
 
 export default function FamilyNotificationsScreen() {
   const { user: currentUser } = useAuth();
+  const { language } = useLanguage();
+  const t = translations[language];
   const [notifications, setNotifications] = useState<NotificationRow[]>([]);
 
   useEffect(() => {
@@ -56,6 +64,22 @@ export default function FamilyNotificationsScreen() {
 
     return () => unsub();
   }, [currentUser?.uid]);
+
+  useEffect(() => {
+    if (language === "zh") return;
+
+    notifications.forEach((item) => {
+      void ensureFirestoreTranslations(
+        doc(db, NOTIFICATIONS_COLLECTION, item.id),
+        item,
+        language,
+        [
+          { baseName: "title", sourceKeys: ["title"] },
+          { baseName: "body", sourceKeys: ["body"] },
+        ]
+      );
+    });
+  }, [notifications, language]);
 
   const formatTime = (createdAt: NotificationDocument["createdAt"]) => {
     if (!createdAt) return "";
@@ -91,6 +115,8 @@ export default function FamilyNotificationsScreen() {
       >
         {notifications.map((item, index) => {
           const isUnread = item.isRead !== true;
+          const title = pickDynamicLocalizedString(item, "title", language, ["title"], t.notification);
+          const body = pickDynamicLocalizedString(item, "body", language, ["body"]);
 
           return (
             <Pressable
@@ -110,7 +136,7 @@ export default function FamilyNotificationsScreen() {
                       isUnread ? styles.unreadTitle : styles.readTitle,
                     ]}
                   >
-                    {item.title}
+                    {title}
                   </Text>
                   <Text
                     style={[
@@ -127,7 +153,7 @@ export default function FamilyNotificationsScreen() {
                     isUnread ? styles.unreadContent : styles.readContent,
                   ]}
                 >
-                  {item.body}
+                  {body}
                 </Text>
               </View>
             </Pressable>

@@ -8,6 +8,8 @@ import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'rea
 // Firebase 相關
 import { db } from '@/firebase/firebaseConfig';
 import { useActiveCareTarget } from '@/src/care-target/useActiveCareTarget';
+import { translations } from '@/src/i18n/translations';
+import { useLanguage } from '@/src/store/LanguageContext';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 
 const initialTasks = [
@@ -23,6 +25,18 @@ const initialTasks = [
 
 export default function CaregiverVoiceScreen() {
   const { activePatientId } = useActiveCareTarget();
+  const { language } = useLanguage();
+  const t = translations[language];
+  const taskTitles: Record<number, string> = {
+    1: t.voiceTaskMedication,
+    2: t.voiceTaskMeal,
+    3: t.voiceTaskShower,
+    4: t.voiceTaskToilet,
+    5: t.voiceTaskExercise,
+    6: t.voiceTaskDrinkWater,
+    7: t.voiceTaskSleep,
+    8: t.voiceTaskEmotion,
+  };
   
   const [tasks, setTasks] = useState<any[]>(initialTasks.map(t => ({ ...t, hasRecording: false })));
   const [playingTaskId, setPlayingTaskId] = useState<number | null>(null);
@@ -94,7 +108,7 @@ export default function CaregiverVoiceScreen() {
   // ==========================================
   const handleCardClick = async (task: any) => {
     if (!task.hasRecording) {
-      Alert.alert('提示', '家屬尚未錄製此項目的語音喔！');
+      Alert.alert(t.prompt, t.notRecorded);
       return;
     }
 
@@ -129,7 +143,7 @@ export default function CaregiverVoiceScreen() {
         }
       });
     } catch (error) {
-      Alert.alert("錯誤", "無法播放語音");
+      Alert.alert(t.resultErrorTitle, t.playVoiceFailed);
       setPlayingTaskId(null);
     }
   };
@@ -141,7 +155,7 @@ export default function CaregiverVoiceScreen() {
         <View style={styles.headerRow}>
           <Pressable onPress={() => router.back()} style={styles.backBtn}>
             <Ionicons name="chevron-back" size={30} color="black" />
-            <Text style={styles.backBtnText}>返回</Text>
+            <Text style={styles.backBtnText}>{t.back}</Text>
           </Pressable>
         </View>
       </View>
@@ -149,7 +163,7 @@ export default function CaregiverVoiceScreen() {
       <View style={styles.hintContainer}>
         <View style={styles.hintBadge}>
           <Ionicons name="volume-medium" size={20} color="#4A8B46" />
-          <Text style={styles.hintText}>點擊圖卡即可播放語音</Text>
+          <Text style={styles.hintText}>{t.communicationCards}</Text>
         </View>
       </View>
 
@@ -173,7 +187,7 @@ export default function CaregiverVoiceScreen() {
                   
                   {isPlaying && (
                     <View style={styles.playingOverlay}>
-                      <Text style={styles.playingText}>播放中...</Text>
+                      <Text style={styles.playingText}>{t.previewing}</Text>
                     </View>
                   )}
 
@@ -195,7 +209,7 @@ export default function CaregiverVoiceScreen() {
                 
                 <View style={styles.titleContainer}>
                   <Text style={[styles.cardTitle, isPlaying && styles.cardTitlePlaying]}>
-                    {task.title}
+                    {taskTitles[task.id] ?? task.title}
                   </Text>
                 </View>
               </Pressable>

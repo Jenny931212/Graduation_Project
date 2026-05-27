@@ -25,8 +25,11 @@ import { db } from "@/firebase/firebaseConfig";
 import { useActiveCareTarget } from "@/src/care-target/useActiveCareTarget";
 import { useAuth } from "@/src/auth/useAuth";
 import { createMedicationReminders } from "@/src/reminders/createMedicationReminders";
+import { translations, type Language } from "@/src/i18n/translations";
+import { useLanguage } from "@/src/store/LanguageContext";
 
 type Item = {
+  raw: any;
   name: string;
   dose: string;
   quantity: string;
@@ -58,6 +61,7 @@ function pickItemNote(it: any): string {
 
 function mapItem(it: any): Item {
   return {
+    raw: it,
     name: pickItemName(it) || "（未辨識藥品名稱）",
     dose: pickItemDose(it) || "未提供",
     quantity: it.quantity ?? "依醫囑",
@@ -80,6 +84,38 @@ function makePrescriptionId(patientId: string, date = new Date()) {
   return `${timeString}_pre_${shortId}`;
 }
 
+function pickLocalizedString(
+  item: Item,
+  baseName: "drug_name" | "usage" | "note",
+  language: Language,
+  fallbackValue: string
+) {
+  const raw = item.raw ?? {};
+  const localized = raw[`${baseName}_${language}`];
+  const zh = raw[`${baseName}_zh`];
+  const base = raw[baseName];
+
+  return String(localized ?? zh ?? base ?? fallbackValue);
+}
+
+function getDisplayItem(
+  item: Item,
+  language: Language,
+  t: (typeof translations)[Language]
+) {
+  return {
+    name:
+      pickLocalizedString(item, "drug_name", language, item.name) ||
+      t.unknownMedicine,
+    dose: item.dose || t.dosageNotProvided,
+    quantity: item.quantity || t.quantityDefault,
+    time: toArray(
+      pickLocalizedString(item, "usage", language, item.time.join(", "))
+    ),
+    note: pickLocalizedString(item, "note", language, item.note),
+  };
+}
+
 export default function ResultScreen() {
   const { prescriptionId, imageUrl, draftTitle, analyzeResult } =
     useLocalSearchParams<{
@@ -91,6 +127,8 @@ export default function ResultScreen() {
 
   const { activePatientId } = useActiveCareTarget();
   const { user } = useAuth();
+  const { language } = useLanguage();
+  const t = translations[language];
 
   const [status, setStatus] = useState<"loading" | "done">("loading");
   const [items, setItems] = useState<Item[]>([]);
@@ -134,7 +172,7 @@ export default function ResultScreen() {
         : [];
 
       setImageUri(safeImageUrl);
-      setTitle(draftTitle ?? "未命名藥單");
+      setTitle(draftTitle ?? t.cameraDefaultDraftTitle);
       setGlobalMemo(safe.memo ?? "");
       setItems(medicines.map((it) => mapItem(it)));
       setStatus("done");
@@ -142,7 +180,7 @@ export default function ResultScreen() {
     }
 
     if (!prescriptionId) {
-      Alert.alert("錯誤", "缺少藥單 ID");
+      Alert.alert(t.resultErrorTitle, t.resultMissingId);
       router.replace("/caregiver");
       return;
     }
@@ -153,7 +191,7 @@ export default function ResultScreen() {
         const snap = await getDoc(ref);
 
         if (!snap.exists()) {
-          Alert.alert("錯誤", "找不到藥單資料");
+          Alert.alert(t.resultErrorTitle, t.resultNotFound);
           router.replace("/caregiver");
           return;
         }
@@ -176,27 +214,27 @@ export default function ResultScreen() {
         setStatus("done");
       } catch (e) {
         console.log("read prescription error:", e);
-        Alert.alert("讀取失敗", "無法讀取藥單資料");
+        Alert.alert(t.resultReadFailedTitle, t.resultReadFailedMessage);
         router.replace("/caregiver");
       }
     })();
-  }, [prescriptionId, isDraftMode, safeAnalyze, safeImageUrl, draftTitle]);
+  }, [prescriptionId, isDraftMode, safeAnalyze, safeImageUrl, draftTitle, t]);
 
   async function handlePrimaryAction() {
     if (isDraftMode) {
       if (!user) {
-        Alert.alert("尚未登入", "請先登入");
+        Alert.alert(t.cameraNotLoggedInTitle, t.resultNotLoggedIn);
         return;
       }
 
       if (!activePatientId) {
-        Alert.alert("尚未選擇長輩", "請先選擇長輩");
+        Alert.alert(t.cameraNoPatientTitle, t.resultNoPatient);
         return;
       }
 
       const finalTitle = title.trim();
       if (!finalTitle) {
-        Alert.alert("請輸入標題", "紀錄標題不能為空白");
+        Alert.alert(t.resultTitleRequiredTitle, t.resultTitleRequiredMessage);
         return;
       }
 
@@ -278,7 +316,7 @@ export default function ResultScreen() {
         router.replace("/caregiver/list");
       } catch (e) {
         console.log("save prescription error:", e);
-        Alert.alert("儲存失敗", "無法儲存藥單資料");
+        Alert.alert(t.resultSaveFailedTitle, t.resultSaveFailedMessage);
       } finally {
         setSaving(false);
       }
@@ -292,7 +330,7 @@ export default function ResultScreen() {
   return (
     <ScrollView contentContainerStyle={{ padding: 20, paddingTop: 90, gap: 16 }}>
       <Text style={{ fontSize: 24, fontWeight: "900", color: "#333" }}>
-        {status === "loading" ? "解析中..." : "確認藥單資訊"}
+        {status === "loading" ? t.resultLoadingTitle : t.resultDoneTitle}
       </Text>
 
       {imageUri && (
@@ -312,18 +350,18 @@ export default function ResultScreen() {
         <View style={{ padding: 40, alignItems: "center" }}>
           <ActivityIndicator size="large" color="#007AFF" />
           <Text style={{ marginTop: 10, opacity: 0.6 }}>
-            AI 正在努力解析中...
+            {t.resultAiLoading}
           </Text>
         </View>
       ) : (
         <View style={{ gap: 12 }}>
           <View style={{ gap: 6 }}>
-            <Text style={{ fontWeight: "800", fontSize: 16 }}>紀錄標題</Text>
+            <Text style={{ fontWeight: "800", fontSize: 16 }}>{t.recordTitle}</Text>
             <TextInput
               value={title}
               onChangeText={setTitle}
               editable={isDraftMode && !saving}
-              placeholder="請輸入紀錄標題"
+              placeholder={t.recordTitlePlaceholder}
               style={{
                 borderWidth: 1,
                 borderColor: "#ccc",
@@ -335,52 +373,57 @@ export default function ResultScreen() {
           </View>
 
           <Text style={{ fontSize: 18, fontWeight: "800", marginTop: 8 }}>
-            藥品明細
+            {t.medicineDetails}
           </Text>
 
-          {items.map((it, idx) => (
-            <View
-              key={idx}
-              style={{
-                padding: 16,
-                borderWidth: 1,
-                borderColor: "#eee",
-                borderRadius: 12,
-                backgroundColor: "#fff",
-                gap: 6,
-              }}
-            >
-              <Text
+          {items.map((it, idx) => {
+            const displayItem = getDisplayItem(it, language, t);
+            const note = displayItem.note || globalMemo;
+
+            return (
+              <View
+                key={idx}
                 style={{
-                  fontSize: 18,
-                  fontWeight: "800",
-                  color: "#007AFF",
+                  padding: 16,
+                  borderWidth: 1,
+                  borderColor: "#eee",
+                  borderRadius: 12,
+                  backgroundColor: "#fff",
+                  gap: 6,
                 }}
               >
-                {it.name}
-              </Text>
-              <View style={{ gap: 2 }}>
-                <Text style={{ fontSize: 15, color: "#444" }}>
-                  用法劑量：{it.dose}
-                </Text>
-                <Text style={{ fontSize: 15, color: "#444" }}>
-                  數量：{it.quantity}
-                </Text>
-                <Text style={{ fontSize: 15, color: "#444" }}>
-                  服用時段：{it.time.join(", ") || "未提供"}
-                </Text>
                 <Text
                   style={{
-                    fontSize: 15,
-                    color: it.note || globalMemo ? "#666" : "#CCC",
-                    marginTop: 2,
+                    fontSize: 18,
+                    fontWeight: "800",
+                    color: "#007AFF",
                   }}
                 >
-                  備註：{it.note || globalMemo || "無"}
+                  {displayItem.name}
                 </Text>
+                <View style={{ gap: 2 }}>
+                  <Text style={{ fontSize: 15, color: "#444" }}>
+                    {t.dosage}：{displayItem.dose}
+                  </Text>
+                  <Text style={{ fontSize: 15, color: "#444" }}>
+                    {t.quantity}：{displayItem.quantity}
+                  </Text>
+                  <Text style={{ fontSize: 15, color: "#444" }}>
+                    {t.usageTime}：{displayItem.time.join(", ") || t.dosageNotProvided}
+                  </Text>
+                  <Text
+                    style={{
+                      fontSize: 15,
+                      color: note ? "#666" : "#CCC",
+                      marginTop: 2,
+                    }}
+                  >
+                    {t.note}：{note || t.none}
+                  </Text>
+                </View>
               </View>
-            </View>
-          ))}
+            );
+          })}
 
           <View style={{ marginTop: 20, gap: 12 }}>
             <Pressable
@@ -402,10 +445,10 @@ export default function ResultScreen() {
                 }}
               >
                 {saving
-                  ? "儲存中..."
+                  ? t.saving
                   : isDraftMode
-                  ? "確認並儲存"
-                  : "返回藥單列表"}
+                  ? t.saveConfirm
+                  : t.backToList}
               </Text>
             </Pressable>
           </View>

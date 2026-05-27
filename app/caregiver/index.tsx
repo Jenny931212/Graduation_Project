@@ -23,6 +23,8 @@ import {
 
 import { useAuth } from "@/src/auth/useAuth";
 import { useActiveCareTarget } from "@/src/care-target/useActiveCareTarget";
+import { translations } from "@/src/i18n/translations";
+import { useLanguage } from "@/src/store/LanguageContext";
 
 type CareTarget = {
   id: string;
@@ -71,6 +73,8 @@ function hhmmToMinutes(hhmm?: string) {
 export default function CaregiverHomeScreen() {
   const { user } = useAuth();
   const { activePatient, activePatientId, ready } = useActiveCareTarget();
+  const { language } = useLanguage();
+  const t = translations[language];
 
   const [target, setTarget] = useState<CareTarget | null>(null);
   const [loading, setLoading] = useState(true);
@@ -162,7 +166,7 @@ export default function CaregiverHomeScreen() {
             id: d.id,
             patientId: data.patientId ?? "",
             prescriptionId: data.prescriptionId ?? "",
-            medicineName: data.medicineName ?? "未命名藥物",
+            medicineName: data.medicineName ?? t.unknownMedicine,
             doseText: data.doseText ?? "",
             scheduleTime: data.scheduleTime ?? "",
             enabled: !!data.enabled,
@@ -188,7 +192,7 @@ export default function CaregiverHomeScreen() {
     );
 
     return unsub;
-  }, [ready, user, activePatientId]);
+  }, [ready, user, activePatientId, t.unknownMedicine]);
 
   // ==========================================
   // 邏輯：監聽今天已完成的服藥紀錄
@@ -246,22 +250,22 @@ export default function CaregiverHomeScreen() {
 
   async function handleDonePress() {
     if (!user) {
-      Alert.alert("尚未登入", "請先登入");
+      Alert.alert(t.cameraNotLoggedInTitle, t.resultNotLoggedIn);
       return;
     }
 
     if (!activePatientId) {
-      Alert.alert("尚未選擇長輩", "請先選擇長輩");
+      Alert.alert(t.cameraNoPatientTitle, t.resultNoPatient);
       return;
     }
 
     if (!currentReminder) {
-      Alert.alert("目前沒有提醒", "暫時沒有可完成的用藥提醒");
+      Alert.alert(t.noReminder, t.noReminderAvailable);
       return;
     }
 
     if (currentReminderDone) {
-      Alert.alert("已完成", "這筆提醒今天已經記錄過了");
+      Alert.alert(t.alreadyDone, t.reminderAlreadyDone);
       return;
     }
 
@@ -282,10 +286,10 @@ export default function CaregiverHomeScreen() {
         createdAt: serverTimestamp(),
       });
 
-      Alert.alert("完成", "已記錄服藥 ✅");
+      Alert.alert(t.alreadyDone, t.doneRecorded);
     } catch (error) {
       console.log("done error:", error);
-      Alert.alert("錯誤", "記錄失敗，請稍後再試");
+      Alert.alert(t.resultErrorTitle, t.recordFailed);
     } finally {
       setDoneLoading(false);
     }
@@ -303,7 +307,7 @@ export default function CaregiverHomeScreen() {
       >
         {/* 使用者姓名 (移除了原本的 Header) */}
         <View style={styles.userInfo}>
-          <Text style={styles.userName}>{target?.name ?? "尚未選擇"}</Text>
+          <Text style={styles.userName}>{target?.name ?? t.noSelectedPatient}</Text>
         </View>
 
         {/* 用藥提醒卡片 */}
@@ -312,8 +316,8 @@ export default function CaregiverHomeScreen() {
             <Text style={styles.emojiLarge}>⏰</Text>
             <Text style={styles.reminderTitle}>
               {currentReminder
-                ? `${currentReminder.scheduleTime} 用藥提醒`
-                : "目前沒有提醒"}
+                ? `${currentReminder.scheduleTime} ${t.reminder}`
+                : t.noReminder}
             </Text>
           </View>
 
@@ -321,8 +325,8 @@ export default function CaregiverHomeScreen() {
             <Text style={styles.emojiMedium}>💊</Text>
             <Text style={styles.reminderSubText}>
               {currentReminder
-                ? `${currentReminder.medicineName} (${currentReminder.doseText || "依醫囑"})`
-                : "請先掃描藥單建立提醒"}
+                ? `${currentReminder.medicineName} (${currentReminder.doseText || t.doseAsDirected})`
+                : t.buildReminderByScan}
             </Text>
           </View>
 
@@ -348,7 +352,7 @@ export default function CaregiverHomeScreen() {
 
         {/* 功能選單標題 */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>功能選單</Text>
+          <Text style={styles.sectionTitle}>{t.functionMenu}</Text>
         </View>
 
         {/* 掃描藥單 */}
@@ -357,7 +361,7 @@ export default function CaregiverHomeScreen() {
           style={styles.mainActionButton}
         >
           <Text style={styles.mainActionEmoji}>📷</Text>
-          <Text style={styles.mainActionText}>掃描藥單</Text>
+          <Text style={styles.mainActionText}>{t.scanPrescription}</Text>
         </Pressable>
 
         {/* 2x2 功能網格 */}
@@ -368,7 +372,7 @@ export default function CaregiverHomeScreen() {
               style={[styles.gridItem, { backgroundColor: "#F4E770" }]}
             >
               <Text style={styles.gridEmoji}>📋</Text>
-              <Text style={styles.gridText}>查看藥單紀錄</Text>
+              <Text style={styles.gridText}>{t.viewPrescriptionRecords}</Text>
             </Pressable>
 
             <Pressable
@@ -376,7 +380,7 @@ export default function CaregiverHomeScreen() {
               style={[styles.gridItem, { backgroundColor: "#EEAC6F" }]}
             >
               <Text style={styles.gridEmoji}>🩺</Text>
-              <Text style={styles.gridText}>每日健康回報</Text>
+              <Text style={styles.gridText}>{t.dailyHealthReport}</Text>
             </Pressable>
           </View>
 
@@ -388,7 +392,7 @@ export default function CaregiverHomeScreen() {
               style={[styles.gridItem, { backgroundColor: "#81E87A" }]}
             >
               <Text style={styles.gridEmoji}>🖼️</Text>
-              <Text style={styles.gridText}>溝通語音圖卡</Text>
+              <Text style={styles.gridText}>{t.communicationCards}</Text>
             </Pressable>
 
             <Pressable
@@ -396,7 +400,7 @@ export default function CaregiverHomeScreen() {
               style={[styles.gridItem, { backgroundColor: "#7BC6F9" }]}
             >
               <Text style={styles.gridEmoji}>📹</Text>
-              <Text style={styles.gridText}>狀況錄影</Text>
+              <Text style={styles.gridText}>{t.conditionRecording}</Text>
             </Pressable>
           </View>
         </View>

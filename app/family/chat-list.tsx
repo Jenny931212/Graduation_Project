@@ -11,9 +11,13 @@ import { router } from "expo-router";
 import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
 import { db } from "@/firebase/firebaseConfig";
 import { useActiveCareTarget } from "@/src/care-target/useActiveCareTarget";
+import { translations } from "@/src/i18n/translations";
+import { useLanguage } from "@/src/store/LanguageContext";
 
 export default function FamilyChatListScreen() {
   const { activePatientId, activePatient } = useActiveCareTarget();
+  const { language } = useLanguage();
+  const t = translations[language];
   const [lastMessage, setLastMessage] = useState<any>(null);
 
   useEffect(() => {
@@ -70,7 +74,11 @@ export default function FamilyChatListScreen() {
           <View style={styles.chatInfo}>
             <View style={styles.chatHeader}>
               <Text style={styles.caregiverName}>
-                {activePatient?.name ? `${activePatient.name} 的看護` : "對話室"}
+                {activePatient?.name
+                  ? language === "zh"
+                    ? `${activePatient.name}${t.caregiverLabel}`
+                    : `${activePatient.name} ${t.caregiverLabel}`
+                  : t.chatRoom}
               </Text>
 
               <Text style={styles.timeText}>
@@ -88,7 +96,7 @@ export default function FamilyChatListScreen() {
                 ? lastMessage.imageUrl
                   ? "[照片]"
                   : lastMessage.text
-                : "尚未有對話紀錄"}
+                : t.noChatRecords}
             </Text>
           </View>
         </Pressable>

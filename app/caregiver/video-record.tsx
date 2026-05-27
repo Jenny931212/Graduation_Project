@@ -9,12 +9,16 @@ import { ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, Tex
 import { db, storage } from '@/firebase/firebaseConfig';
 import { useAuth } from '@/src/auth/useAuth';
 import { useActiveCareTarget } from '@/src/care-target/useActiveCareTarget';
+import { translations } from '@/src/i18n/translations';
+import { useLanguage } from '@/src/store/LanguageContext';
 import { arrayRemove, arrayUnion, collection, deleteDoc, doc, onSnapshot, orderBy, query, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 
 export default function AbnormalRecordScreen() {
   const { user } = useAuth();
   const { activePatientId } = useActiveCareTarget();
+  const { language } = useLanguage();
+  const t = translations[language];
   
   const navigation = useNavigation();
   useEffect(() => {
@@ -74,7 +78,7 @@ export default function AbnormalRecordScreen() {
   // ==========================================
   const openCamera = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') return Alert.alert('需要權限', '請允許使用相機');
+    if (status !== 'granted') return Alert.alert(t.warning, t.cameraPermissionMessage);
     const result = await ImagePicker.launchCameraAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.All,
       videoMaxDuration: 60,
@@ -88,7 +92,7 @@ export default function AbnormalRecordScreen() {
 
   const openGallery = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') return Alert.alert('需要權限', '請允許存取相簿');
+    if (status !== 'granted') return Alert.alert(t.warning, t.cameraAlbumPermissionMessage);
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.All,
       videoMaxDuration: 60,
@@ -101,10 +105,10 @@ export default function AbnormalRecordScreen() {
   };
 
   const handlePickMedia = () => {
-    Alert.alert('選擇上傳方式', '請選擇你要拍攝或從相簿挑選：', [
-      { text: '📷 開啟相機', onPress: openCamera },
-      { text: '🖼️ 從相簿選擇', onPress: openGallery },
-      { text: '取消', style: 'cancel' }
+    Alert.alert(t.method, t.cameraStartAnalyze, [
+      { text: t.cameraTakePhoto, onPress: openCamera },
+      { text: t.cameraPickImage, onPress: openGallery },
+      { text: t.cancel, style: 'cancel' }
     ]);
   };
 
@@ -148,7 +152,7 @@ export default function AbnormalRecordScreen() {
 
   const handleSaveRecord = async () => {
     if (!user || !activePatientId) return;
-    if (!title.trim()) return Alert.alert('提醒', '請輸入標題或資料夾名稱');
+    if (!title.trim()) return Alert.alert(t.prompt, t.resultTitleRequiredMessage);
 
     setIsUploading(true);
     try {
@@ -174,10 +178,10 @@ export default function AbnormalRecordScreen() {
         await setDoc(docRef, { ...basePayload, type: 'folder', entries: [] });
       }
 
-      Alert.alert('成功', '紀錄已儲存');
+      Alert.alert(t.success, t.saveSuccessMessage);
       goToList();
     } catch (error) {
-      Alert.alert('錯誤', '儲存失敗，請重試');
+      Alert.alert(t.resultErrorTitle, t.resultSaveFailedMessage);
     } finally {
       setIsUploading(false);
     }
@@ -203,10 +207,10 @@ export default function AbnormalRecordScreen() {
       const docRef = doc(db, 'abnormal_records', selectedRecord.id);
       await updateDoc(docRef, { entries: arrayUnion(newEntry) });
 
-      Alert.alert('成功', '追蹤紀錄已新增');
+      Alert.alert(t.success, t.saveSuccessMessage);
       goBackToFolder();
     } catch (error) {
-      Alert.alert('錯誤', '儲存失敗，請重試');
+      Alert.alert(t.resultErrorTitle, t.resultSaveFailedMessage);
     } finally {
       setIsUploading(false);
     }
@@ -217,15 +221,15 @@ export default function AbnormalRecordScreen() {
   // ==========================================
   const handleDeleteRecord = () => {
     setDropdownOpen(false);
-    Alert.alert('確認刪除', '您確定要刪除整筆紀錄嗎？這將無法復原。', [
-      { text: '取消', style: 'cancel' },
-      { text: '刪除', style: 'destructive', onPress: async () => {
+    Alert.alert(t.deleteConfirmTitle, t.deletePrescriptionMessage, [
+      { text: t.cancel, style: 'cancel' },
+      { text: t.delete, style: 'destructive', onPress: async () => {
           try {
             await deleteDoc(doc(db, 'abnormal_records', selectedRecord.id));
-            Alert.alert('成功', '紀錄已刪除');
+            Alert.alert(t.success, t.deleteConfirm);
             goToList();
           } catch (e) {
-            Alert.alert('錯誤', '刪除失敗');
+            Alert.alert(t.resultErrorTitle, t.deleteFailedShort);
           }
       }}
     ]);
@@ -233,16 +237,16 @@ export default function AbnormalRecordScreen() {
 
   const handleDeleteFolderEntry = () => {
     setDropdownOpen(false);
-    Alert.alert('確認刪除', '您確定要刪除這筆追蹤項目嗎？', [
-      { text: '取消', style: 'cancel' },
-      { text: '刪除', style: 'destructive', onPress: async () => {
+    Alert.alert(t.deleteConfirmTitle, t.deleteVoiceMessage, [
+      { text: t.cancel, style: 'cancel' },
+      { text: t.delete, style: 'destructive', onPress: async () => {
           try {
             const docRef = doc(db, 'abnormal_records', selectedRecord.id);
             await updateDoc(docRef, { entries: arrayRemove(selectedFolderEntry) });
-            Alert.alert('成功', '追蹤項目已刪除');
+            Alert.alert(t.success, t.deleteConfirm);
             goBackToFolder();
           } catch (e) {
-            Alert.alert('錯誤', '刪除失敗');
+            Alert.alert(t.resultErrorTitle, t.deleteFailedShort);
           }
       }}
     ]);
@@ -263,9 +267,9 @@ export default function AbnormalRecordScreen() {
         setSelectedFolderEntry({ ...selectedFolderEntry, notesOriginal: notes });
         setCurrentView('folderEntryDetail');
       }
-      Alert.alert('成功', '文字已更新');
+      Alert.alert(t.success, t.saveSuccessMessage);
     } catch (e) {
-      Alert.alert('錯誤', '更新失敗');
+      Alert.alert(t.resultErrorTitle, t.resultSaveFailedMessage);
     } finally {
       setIsUploading(false);
     }
@@ -319,18 +323,18 @@ export default function AbnormalRecordScreen() {
   const renderList = () => (
     <View style={styles.viewContainer}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <Text style={styles.listHint}>點擊列表查看詳情，或點擊右下角新增。</Text>
+        <Text style={styles.listHint}>{t.conditionHint}</Text>
         {records.map(record => (
           <Pressable key={record.id} onPress={() => goToDetail(record)} style={styles.listItem}>
             <View style={{ flex: 1 }}>
               <View style={styles.tagContainer}>
                 {record.type === 'folder' ? (
-                  <Text style={styles.tagFolder}>追蹤資料夾</Text>
+                  <Text style={styles.tagFolder}>{t.trackingFolder}</Text>
                 ) : (
-                  <Text style={styles.tagSingle}>單次紀錄</Text>
+                  <Text style={styles.tagSingle}>{t.singleRecord}</Text>
                 )}
               </View>
-              <Text style={styles.listTitle} numberOfLines={1}>{record.titleOriginal || '未命名紀錄'}</Text>
+              <Text style={styles.listTitle} numberOfLines={1}>{record.titleOriginal || t.unnamedRecord}</Text>
               <Text style={styles.listDate}>{record.displayDate}</Text>
             </View>
             <View style={styles.listIconBox}>
@@ -355,7 +359,7 @@ export default function AbnormalRecordScreen() {
           <Pressable onPress={() => setIsDoctorMode(!isDoctorMode)} style={[styles.doctorModeBtn, isDoctorMode ? styles.doctorModeBtnActive : styles.doctorModeBtnIdle]}>
             <Ionicons name="language" size={18} color={isDoctorMode ? 'white' : '#666'} />
             <Text style={[styles.doctorModeText, isDoctorMode && { color: 'white' }]}>
-              {isDoctorMode ? '醫師檢視模式 (中文) : ON' : '切換為醫師檢視 (中文)'}
+              {isDoctorMode ? t.doctorModeOn : t.doctorModeSwitch}
             </Text>
           </Pressable>
         </View>
@@ -363,11 +367,11 @@ export default function AbnormalRecordScreen() {
         <View style={styles.mediaContainer}>
           {selectedRecord.hasMedia && selectedRecord.mediaUrl ? (
             renderMedia(selectedRecord.mediaUrl, selectedRecord.mediaType)
-          ) : (<Text style={{ color: '#999', fontWeight: 'bold' }}>沒有影片/照片</Text>)}
+          ) : (<Text style={{ color: '#999', fontWeight: 'bold' }}>{t.noMedia}</Text>)}
         </View>
 
         <View style={styles.detailHeaderRow}>
-          <Text style={styles.detailTitle}>{isDoctorMode ? (selectedRecord.titleZh || 'AI 翻譯處理中...') : selectedRecord.titleOriginal}</Text>
+          <Text style={styles.detailTitle}>{isDoctorMode ? (selectedRecord.titleZh || t.aiTranslating) : selectedRecord.titleOriginal}</Text>
           
           <View style={{ position: 'relative', zIndex: 50 }}>
             <Pressable onPress={() => setDropdownOpen(!dropdownOpen)} style={{ paddingHorizontal: 8, paddingBottom: 8 }}>
@@ -375,8 +379,8 @@ export default function AbnormalRecordScreen() {
             </Pressable>
             {dropdownOpen && (
               <View style={styles.dropdownMenu}>
-                <Pressable onPress={goToEditRecord} style={styles.dropdownItem}><Text style={styles.dropdownText}>編輯文字</Text></Pressable>
-                <Pressable onPress={handleDeleteRecord} style={[styles.dropdownItem, { borderBottomWidth: 0 }]}><Text style={[styles.dropdownText, { color: 'red' }]}>刪除</Text></Pressable>
+                <Pressable onPress={goToEditRecord} style={styles.dropdownItem}><Text style={styles.dropdownText}>{t.edit}</Text></Pressable>
+                <Pressable onPress={handleDeleteRecord} style={[styles.dropdownItem, { borderBottomWidth: 0 }]}><Text style={[styles.dropdownText, { color: 'red' }]}>{t.delete}</Text></Pressable>
               </View>
             )}
           </View>
@@ -384,9 +388,9 @@ export default function AbnormalRecordScreen() {
 
         <Text style={styles.detailDate}>{selectedRecord.displayDate}</Text>
         <View style={styles.noteBox}>
-          <Text style={styles.noteTitle}>備註：</Text>
+          <Text style={styles.noteTitle}>{t.note}:</Text>
           <Text style={[styles.noteText, isDoctorMode && { fontSize: 18 }]}>
-            {isDoctorMode ? (selectedRecord.notesZh || 'AI 翻譯處理中...') : selectedRecord.notesOriginal}
+            {isDoctorMode ? (selectedRecord.notesZh || t.aiTranslating) : selectedRecord.notesOriginal}
           </Text>
         </View>
       </ScrollView>
@@ -400,33 +404,33 @@ export default function AbnormalRecordScreen() {
         <View style={[styles.doctorModeRow, { justifyContent: 'space-between' }]}>
           <View style={{ position: 'relative', zIndex: 50 }}>
             <Pressable onPress={() => setDropdownOpen(!dropdownOpen)} style={{ padding: 8, backgroundColor: '#EEE', borderRadius: 20 }}>
-              <Text style={{ fontSize: 20, color: '#666', lineHeight: 20 }}>⋯ 操作</Text>
+              <Text style={{ fontSize: 20, color: '#666', lineHeight: 20 }}>⋯</Text>
             </Pressable>
             {dropdownOpen && (
               <View style={[styles.dropdownMenu, { left: 0, right: 'auto' }]}>
-                <Pressable onPress={goToEditRecord} style={styles.dropdownItem}><Text style={styles.dropdownText}>編輯標題/描述</Text></Pressable>
-                <Pressable onPress={handleDeleteRecord} style={[styles.dropdownItem, { borderBottomWidth: 0 }]}><Text style={[styles.dropdownText, { color: 'red' }]}>刪除整個資料夾</Text></Pressable>
+                <Pressable onPress={goToEditRecord} style={styles.dropdownItem}><Text style={styles.dropdownText}>{t.edit}</Text></Pressable>
+                <Pressable onPress={handleDeleteRecord} style={[styles.dropdownItem, { borderBottomWidth: 0 }]}><Text style={[styles.dropdownText, { color: 'red' }]}>{t.delete}</Text></Pressable>
               </View>
             )}
           </View>
 
           <Pressable onPress={() => setIsDoctorMode(!isDoctorMode)} style={[styles.doctorModeBtn, isDoctorMode ? styles.doctorModeBtnActive : styles.doctorModeBtnIdle]}>
             <Ionicons name="language" size={18} color={isDoctorMode ? 'white' : '#666'} />
-            <Text style={[styles.doctorModeText, isDoctorMode && { color: 'white' }]}>{isDoctorMode ? '中文模式 : ON' : '切換中文'}</Text>
+            <Text style={[styles.doctorModeText, isDoctorMode && { color: 'white' }]}>{isDoctorMode ? t.chineseModeOn : t.switchChinese}</Text>
           </Pressable>
         </View>
 
         <View style={styles.folderHeader}>
           <Ionicons name="folder-open" size={36} color="#7BC6F9" style={{ marginRight: 12 }} />
           <View style={{ flex: 1 }}>
-            <Text style={styles.detailTitle}>{isDoctorMode ? (selectedRecord.titleZh || 'AI 翻譯處理中...') : selectedRecord.titleOriginal}</Text>
+            <Text style={styles.detailTitle}>{isDoctorMode ? (selectedRecord.titleZh || t.aiTranslating) : selectedRecord.titleOriginal}</Text>
             <Text style={styles.detailDate}>建立於: {selectedRecord.displayDate}</Text>
           </View>
         </View>
 
         <Pressable onPress={goToCreateFolderEntry} style={styles.addEntryBtn}>
           <Feather name="plus" size={24} color="#D37B2B" />
-          <Text style={styles.addEntryBtnText}>新增今日狀況</Text>
+          <Text style={styles.addEntryBtnText}>{t.todayRecords}</Text>
         </Pressable>
 
         <View style={styles.timelineContainer}>
@@ -451,8 +455,8 @@ export default function AbnormalRecordScreen() {
                     ) : <Ionicons name="document-text" size={32} color="#CCC" />}
                   </View>
                   <View style={{ flex: 1, justifyContent: 'center' }}>
-                    <Text style={styles.timelineNotes} numberOfLines={2}>{isDoctorMode ? (entry.notesZh || 'AI 翻譯中...') : entry.notesOriginal}</Text>
-                    <Text style={styles.timelineMore}>查看詳情 ➔</Text>
+                    <Text style={styles.timelineNotes} numberOfLines={2}>{isDoctorMode ? (entry.notesZh || t.aiTranslatingShort) : entry.notesOriginal}</Text>
+                    <Text style={styles.timelineMore}>{t.viewMore}</Text>
                   </View>
                 </View>
               </Pressable>
@@ -472,21 +476,21 @@ export default function AbnormalRecordScreen() {
           <View style={styles.doctorModeRow}>
             <Pressable onPress={() => setIsDoctorMode(!isDoctorMode)} style={[styles.doctorModeBtn, isDoctorMode ? styles.doctorModeBtnActive : styles.doctorModeBtnIdle]}>
               <Ionicons name="language" size={18} color={isDoctorMode ? 'white' : '#666'} />
-              <Text style={[styles.doctorModeText, isDoctorMode && { color: 'white' }]}>{isDoctorMode ? '中文模式 : ON' : '切換中文'}</Text>
+              <Text style={[styles.doctorModeText, isDoctorMode && { color: 'white' }]}>{isDoctorMode ? t.chineseModeOn : t.switchChinese}</Text>
             </Pressable>
           </View>
 
           <View style={styles.folderBadge}>
             <Ionicons name="folder" size={16} color="#E59752" style={{ marginRight: 6 }} />
-            <Text style={styles.folderBadgeText}>來自資料夾：{isDoctorMode ? (selectedRecord.titleZh || selectedRecord.titleOriginal) : selectedRecord.titleOriginal}</Text>
+            <Text style={styles.folderBadgeText}>{t.fromFolder}: {isDoctorMode ? (selectedRecord.titleZh || selectedRecord.titleOriginal) : selectedRecord.titleOriginal}</Text>
           </View>
 
           <View style={styles.mediaContainer}>
-             {selectedFolderEntry.mediaUrl ? renderMedia(selectedFolderEntry.mediaUrl, selectedFolderEntry.mediaType) : <Text style={{ color: '#999', fontWeight: 'bold' }}>無相片</Text>}
+             {selectedFolderEntry.mediaUrl ? renderMedia(selectedFolderEntry.mediaUrl, selectedFolderEntry.mediaType) : <Text style={{ color: '#999', fontWeight: 'bold' }}>{t.noPhoto}</Text>}
           </View>
 
           <View style={styles.detailHeaderRow}>
-            <Text style={styles.detailTitle}>紀錄時間：</Text>
+            <Text style={styles.detailTitle}>{t.recordTime}:</Text>
             
             <View style={{ position: 'relative', zIndex: 50 }}>
               <Pressable onPress={() => setDropdownOpen(!dropdownOpen)} style={{ paddingHorizontal: 8, paddingBottom: 8 }}>
@@ -494,8 +498,8 @@ export default function AbnormalRecordScreen() {
               </Pressable>
               {dropdownOpen && (
                 <View style={styles.dropdownMenu}>
-                  <Pressable onPress={goToEditFolderEntry} style={styles.dropdownItem}><Text style={styles.dropdownText}>編輯描述</Text></Pressable>
-                  <Pressable onPress={handleDeleteFolderEntry} style={[styles.dropdownItem, { borderBottomWidth: 0 }]}><Text style={[styles.dropdownText, { color: 'red' }]}>刪除</Text></Pressable>
+                  <Pressable onPress={goToEditFolderEntry} style={styles.dropdownItem}><Text style={styles.dropdownText}>{t.edit}</Text></Pressable>
+                  <Pressable onPress={handleDeleteFolderEntry} style={[styles.dropdownItem, { borderBottomWidth: 0 }]}><Text style={[styles.dropdownText, { color: 'red' }]}>{t.delete}</Text></Pressable>
                 </View>
               )}
             </View>
@@ -503,8 +507,8 @@ export default function AbnormalRecordScreen() {
 
           <Text style={styles.detailDate}>{eDateStr}</Text>
           <View style={styles.noteBox}>
-            <Text style={styles.noteTitle}>備註：</Text>
-            <Text style={[styles.noteText, isDoctorMode && { fontSize: 18 }]}>{isDoctorMode ? (selectedFolderEntry.notesZh || 'AI 翻譯處理中...') : selectedFolderEntry.notesOriginal}</Text>
+            <Text style={styles.noteTitle}>{t.note}:</Text>
+            <Text style={[styles.noteText, isDoctorMode && { fontSize: 18 }]}>{isDoctorMode ? (selectedFolderEntry.notesZh || t.aiTranslating) : selectedFolderEntry.notesOriginal}</Text>
           </View>
         </ScrollView>
       </View>
@@ -516,18 +520,18 @@ export default function AbnormalRecordScreen() {
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.folderIntroBox}>
           <Ionicons name="pencil" size={24} color="#D37B2B" />
-          <Text style={styles.folderIntroText}>修改紀錄文字 (若需修改照片，請刪除後重新建立)</Text>
+          <Text style={styles.folderIntroText}>{t.editPrescriptionInfo}</Text>
         </View>
 
         {currentView === 'edit' && (
           <View style={{ marginBottom: 20 }}>
-            <Text style={styles.inputLabel}>標題 / 資料夾名稱</Text>
+            <Text style={styles.inputLabel}>{t.recordTitle}</Text>
             <TextInput value={title} onChangeText={setTitle} style={styles.inputTitle} />
           </View>
         )}
 
         <View style={{ marginBottom: 20 }}>
-          <Text style={styles.inputLabel}>備註 / 狀況描述</Text>
+          <Text style={styles.inputLabel}>{t.noteDescription}</Text>
           <TextInput value={notes} onChangeText={setNotes} multiline numberOfLines={6} style={styles.inputNotes} />
         </View>
       </ScrollView>
@@ -542,8 +546,8 @@ export default function AbnormalRecordScreen() {
     <View style={styles.viewContainer}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.switchTabs}>
-          <Pressable onPress={() => setCreateFormType('single')} style={[styles.tabBtn, createFormType === 'single' && styles.tabBtnActive]}><Text style={[styles.tabText, createFormType === 'single' && styles.tabTextActive]}>單次紀錄</Text></Pressable>
-          <Pressable onPress={() => setCreateFormType('folder')} style={[styles.tabBtn, createFormType === 'folder' && styles.tabBtnActive]}><Text style={[styles.tabText, createFormType === 'folder' && styles.tabTextActive]}>開新資料夾</Text></Pressable>
+          <Pressable onPress={() => setCreateFormType('single')} style={[styles.tabBtn, createFormType === 'single' && styles.tabBtnActive]}><Text style={[styles.tabText, createFormType === 'single' && styles.tabTextActive]}>{t.singleRecord}</Text></Pressable>
+          <Pressable onPress={() => setCreateFormType('folder')} style={[styles.tabBtn, createFormType === 'folder' && styles.tabBtnActive]}><Text style={[styles.tabText, createFormType === 'folder' && styles.tabTextActive]}>{t.trackingFolder}</Text></Pressable>
         </View>
 
         {createFormType === 'single' ? (
@@ -556,30 +560,30 @@ export default function AbnormalRecordScreen() {
                    {/* 獨立的懸浮重新選擇按鈕 */}
                    <Pressable onPress={handlePickMedia} style={styles.reselectBtn}>
                      <Ionicons name="refresh" size={16} color="white" />
-                     <Text style={styles.reselectBtnText}>重新選擇</Text>
+                     <Text style={styles.reselectBtnText}>{t.cameraPickImage}</Text>
                    </Pressable>
                  </View>
                ) : (
                  <Pressable onPress={handlePickMedia} style={styles.uploadPlaceholder}>
                    <Ionicons name="camera" size={48} color="#999" style={{ marginBottom: 8 }} />
-                   <Text style={{ color: '#666', fontWeight: 'bold' }}>點擊拍攝或選擇檔案</Text>
+                   <Text style={{ color: '#666', fontWeight: 'bold' }}>{t.cameraPickImage}</Text>
                  </Pressable>
                )}
             </View>
 
-            <TextInput value={title} onChangeText={setTitle} placeholder="請輸入標題" style={styles.inputTitle} placeholderTextColor="#999" />
-            <TextInput value={notes} onChangeText={setNotes} placeholder="請輸入備註說明" multiline numberOfLines={5} style={styles.inputNotes} placeholderTextColor="#999" />
+            <TextInput value={title} onChangeText={setTitle} placeholder={t.recordTitlePlaceholder} style={styles.inputTitle} placeholderTextColor="#999" />
+            <TextInput value={notes} onChangeText={setNotes} placeholder={t.notePlaceholder} multiline numberOfLines={5} style={styles.inputNotes} placeholderTextColor="#999" />
           </>
         ) : (
           <>
             <View style={styles.folderIntroBox}>
               <Ionicons name="folder-open" size={28} color="#D37B2B" />
-              <Text style={styles.folderIntroText}>建立一個新資料夾來持續追蹤特定狀況。</Text>
+              <Text style={styles.folderIntroText}>{t.conditionHint}</Text>
             </View>
-            <Text style={styles.inputLabel}>資料夾名稱</Text>
-            <TextInput value={title} onChangeText={setTitle} placeholder="例如: 右腳傷口觀察" style={styles.inputTitle} placeholderTextColor="#999" />
-            <Text style={styles.inputLabel}>說明 / 部位描述</Text>
-            <TextInput value={notes} onChangeText={setNotes} placeholder="請簡單描述要追蹤的項目..." multiline numberOfLines={4} style={styles.inputNotes} placeholderTextColor="#999" />
+            <Text style={styles.inputLabel}>{t.trackingFolder}</Text>
+            <TextInput value={title} onChangeText={setTitle} placeholder={t.recordTitlePlaceholder} style={styles.inputTitle} placeholderTextColor="#999" />
+            <Text style={styles.inputLabel}>{t.noteDescription}</Text>
+            <TextInput value={notes} onChangeText={setNotes} placeholder={t.notePlaceholder} multiline numberOfLines={4} style={styles.inputNotes} placeholderTextColor="#999" />
           </>
         )}
       </ScrollView>
@@ -592,7 +596,7 @@ export default function AbnormalRecordScreen() {
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.folderBadge}>
           <Ionicons name="folder" size={16} color="#E59752" style={{ marginRight: 6 }} />
-          <Text style={styles.folderBadgeText}>新增至：{selectedRecord.titleOriginal}</Text>
+          <Text style={styles.folderBadgeText}>{t.addCareTarget}: {selectedRecord.titleOriginal}</Text>
         </View>
 
         {/* 🌟 核心修改 A：媒體上傳與重新選擇按鈕分離 */}
@@ -602,19 +606,19 @@ export default function AbnormalRecordScreen() {
                {renderMedia(mediaUri, mediaType, true)}
                <Pressable onPress={handlePickMedia} style={styles.reselectBtn}>
                  <Ionicons name="refresh" size={16} color="white" />
-                 <Text style={styles.reselectBtnText}>重新選擇</Text>
+                 <Text style={styles.reselectBtnText}>{t.cameraPickImage}</Text>
                </Pressable>
              </View>
            ) : (
              <Pressable onPress={handlePickMedia} style={styles.uploadPlaceholder}>
                <Ionicons name="camera" size={48} color="#999" style={{ marginBottom: 8 }} />
-               <Text style={{ color: '#666', fontWeight: 'bold' }}>點擊拍攝今日狀況/影片</Text>
+               <Text style={{ color: '#666', fontWeight: 'bold' }}>{t.cameraPickImage}</Text>
              </Pressable>
            )}
         </View>
 
-        <Text style={styles.inputLabel}>狀況描述</Text>
-        <TextInput value={notes} onChangeText={setNotes} placeholder="請描述今天的變化..." multiline numberOfLines={6} style={styles.inputNotes} placeholderTextColor="#999" />
+        <Text style={styles.inputLabel}>{t.noteDescription}</Text>
+        <TextInput value={notes} onChangeText={setNotes} placeholder={t.notePlaceholder} multiline numberOfLines={6} style={styles.inputNotes} placeholderTextColor="#999" />
       </ScrollView>
       <Pressable onPress={handleSaveFolderEntry} disabled={isUploading} style={styles.fabBtn}>{isUploading ? <ActivityIndicator color="black" /> : <Feather name="check" size={36} color="black" />}</Pressable>
     </View>
@@ -635,7 +639,7 @@ export default function AbnormalRecordScreen() {
             style={styles.backBtn}
           >
             <Ionicons name="chevron-back" size={28} color="black" />
-            <Text style={styles.headerTitle}>異常紀錄</Text>
+            <Text style={styles.headerTitle}>{t.conditionView}</Text>
           </Pressable>
         </View>
       </View>

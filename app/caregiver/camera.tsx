@@ -4,6 +4,7 @@ import {
   Text,
   Image,
   Alert,
+  ActivityIndicator,
   ScrollView,
   Pressable,
   StyleSheet,
@@ -19,22 +20,27 @@ import { uploadPrescriptionImage } from "@/firebase/uploadPrescriptionImage";
 import { useAuth } from "@/src/auth/useAuth";
 import { analyzePrescriptionByUrl } from "@/src/api/analyzePrescription";
 import { useActiveCareTarget } from "@/src/care-target/useActiveCareTarget";
+import { translations } from "@/src/i18n/translations";
+import { useLanguage } from "@/src/store/LanguageContext";
 
 export default function CameraScreen() {
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [qrMode, setQrMode] = useState(false);
   const [scanned, setScanned] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [refreshKey, setRefreshKey] = useState(0);
 
   const { user } = useAuth();
   const { activePatientId } = useActiveCareTarget();
+  const { language } = useLanguage();
+  const t = translations[language];
 
   async function pickImage() {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
-      Alert.alert("需要相簿權限", "請允許 App 讀取相簿，才能選取藥單照片。");
+      Alert.alert(t.cameraAlbumPermissionTitle, t.cameraAlbumPermissionMessage);
       return;
     }
 
@@ -51,7 +57,7 @@ export default function CameraScreen() {
   async function takePhoto() {
     const perm = await ImagePicker.requestCameraPermissionsAsync();
     if (!perm.granted) {
-      Alert.alert("需要相機權限", "請允許使用相機，才能拍攝藥單照片。");
+      Alert.alert(t.cameraPermissionTitle, t.cameraPermissionMessage);
       return;
     }
 
@@ -69,7 +75,7 @@ export default function CameraScreen() {
       const result = await requestCameraPermission();
 
       if (!result.granted) {
-        Alert.alert("需要相機權限", "請允許使用相機，才能掃描 QR Code。");
+        Alert.alert(t.cameraPermissionTitle, t.cameraQrPermissionMessage);
         return;
       }
     }
@@ -87,7 +93,7 @@ export default function CameraScreen() {
 
     if (!url.startsWith("http://") && !url.startsWith("https://")) {
       setQrMode(false);
-      Alert.alert("無法開啟", "這個 QR Code 不是有效網址。");
+      Alert.alert(t.cameraInvalidQrTitle, t.cameraInvalidQrMessage);
       return;
     }
 
@@ -101,27 +107,33 @@ export default function CameraScreen() {
         try {
           await Linking.openURL(url);
         } catch (e) {
-          Alert.alert("開啟失敗");
+          Alert.alert(t.cameraOpenFailed);
         }
       }, 300);
     });
   }
 
   async function goNext() {
+    if (isAnalyzing) {
+      return;
+    }
+
     if (!imageUri) {
-      Alert.alert("還沒選照片", "請先拍攝或選取一張藥單照片。");
+      Alert.alert(t.cameraNoPhotoTitle, t.cameraNoPhotoMessage);
       return;
     }
 
     if (!user) {
-      Alert.alert("尚未登入", "請先登入再上傳藥單");
+      Alert.alert(t.cameraNotLoggedInTitle, t.cameraNotLoggedInMessage);
       return;
     }
 
     if (!activePatientId) {
-      Alert.alert("尚未選擇長輩", "請先選擇長輩再上傳藥單。");
+      Alert.alert(t.cameraNoPatientTitle, t.cameraNoPatientMessage);
       return;
     }
+
+    setIsAnalyzing(true);
 
     try {
       console.log("[1] uploading image...");
@@ -137,7 +149,7 @@ export default function CameraScreen() {
       console.log("[2] analyzeResult:", analyzeResult);
 
       const safe = JSON.parse(JSON.stringify(analyzeResult ?? {}));
-      const draftTitle = safe.clinic_name ?? "未命名藥單";
+      const draftTitle = safe.clinic_name ?? t.cameraDefaultDraftTitle;
 
       console.log("[3] navigate to result draft...");
       console.log("[3] draftTitle =", draftTitle);
@@ -158,13 +170,15 @@ export default function CameraScreen() {
 
       if (msg.includes("429") || msg.includes("RESOURCE_EXHAUSTED")) {
         Alert.alert(
-          "AI 服務暫時無法使用",
-          "目前 AI 解析請求次數已達上限，請稍後再試。"
+          t.cameraAiLimitTitle,
+          t.cameraAiLimitMessage
         );
         return;
       }
 
-      Alert.alert("處理失敗", msg || "未知錯誤（請查看 console）");
+      Alert.alert(t.cameraProcessFailed, msg || t.cameraUnknownError);
+    } finally {
+      setIsAnalyzing(false);
     }
   }
 
@@ -181,12 +195,12 @@ export default function CameraScreen() {
         />
 
         <View style={styles.qrOverlay}>
-          <Text style={styles.qrTitle}>掃描 QR Code</Text>
-          <Text style={styles.qrHint}>請將 QR Code 對準畫面中央</Text>
+          <Text style={styles.qrTitle}>{t.cameraQrTitle}</Text>
+          <Text style={styles.qrHint}>{t.cameraQrHint}</Text>
         </View>
 
         <Pressable onPress={() => setQrMode(false)} style={styles.cancelQrBtn}>
-          <Text style={styles.cancelQrText}>取消掃描</Text>
+          <Text style={styles.cancelQrText}>{t.cameraCancelScan}</Text>
         </Pressable>
       </View>
     );
@@ -196,23 +210,23 @@ export default function CameraScreen() {
     <ScrollView key={refreshKey} contentContainerStyle={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#F4E770" />
       <View style={styles.header}>
-        <Text style={styles.title}>上傳藥單</Text>
+        <Text style={styles.title}>{t.cameraTitle}</Text>
         <Text style={styles.subtitle}>
-          請拍攝清晰的藥單，AI 將為您解析內容
+          {t.cameraSubtitle}
         </Text>
       </View>
 
       <View style={styles.actions}>
         <Pressable onPress={takePhoto} style={styles.primaryBtn}>
-          <Text style={styles.primaryBtnText}>📷 開相機拍攝</Text>
+          <Text style={styles.primaryBtnText}>{t.cameraTakePhoto}</Text>
         </Pressable>
 
         <Pressable onPress={pickImage} style={styles.outlineBtn}>
-          <Text style={styles.outlineBtnText}>🖼️ 從相簿選取</Text>
+          <Text style={styles.outlineBtnText}>{t.cameraPickImage}</Text>
         </Pressable>
 
         <Pressable onPress={openQrScanner} style={styles.qrBtn}>
-          <Text style={styles.qrBtnText}>🔳 掃描 QR Code</Text>
+          <Text style={styles.qrBtnText}>{t.cameraScanQr}</Text>
         </Pressable>
       </View>
 
@@ -226,15 +240,22 @@ export default function CameraScreen() {
             />
           </View>
 
-          <Pressable onPress={goNext} style={styles.successBtn}>
+          <Pressable
+            onPress={goNext}
+            disabled={isAnalyzing}
+            style={[styles.successBtn, isAnalyzing && styles.successBtnDisabled]}
+          >
+            {isAnalyzing ? (
+              <ActivityIndicator color="#fff" style={styles.successBtnSpinner} />
+            ) : null}
             <Text style={styles.successBtnText}>
-              確認照片，開始解析 →
+              {isAnalyzing ? t.cameraAnalyzing : t.cameraStartAnalyze}
             </Text>
           </Pressable>
         </View>
       ) : (
         <View style={styles.emptyBox}>
-          <Text style={styles.emptyText}>尚未選取照片</Text>
+          <Text style={styles.emptyText}>{t.cameraNoImage}</Text>
         </View>
       )}
 
@@ -242,7 +263,7 @@ export default function CameraScreen() {
         onPress={() => router.replace("/caregiver")}
         style={styles.back}
       >
-        <Text style={styles.backText}>取消並返回</Text>
+        <Text style={styles.backText}>{t.cameraCancelBack}</Text>
       </Pressable>
     </ScrollView>
   );
@@ -300,7 +321,11 @@ const styles = StyleSheet.create({
     backgroundColor: "#34C759",
     borderRadius: 14,
     alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
   },
+  successBtnDisabled: { opacity: 0.7 },
+  successBtnSpinner: { marginRight: 8 },
   successBtnText: { fontSize: 18, fontWeight: "900", color: "#fff" },
 
   emptyBox: {

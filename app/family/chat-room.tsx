@@ -28,6 +28,12 @@ import {
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { useActiveCareTarget } from "@/src/care-target/useActiveCareTarget";
 import { useAuth } from "@/src/auth/useAuth";
+import {
+  ensureFirestoreTranslations,
+  pickDynamicLocalizedString,
+} from "@/src/i18n/dynamicTranslation";
+import { translations } from "@/src/i18n/translations";
+import { useLanguage } from "@/src/store/LanguageContext";
 
 export default function FamilyChatRoomScreen() {
   const [inputText, setInputText] = useState("");
@@ -38,6 +44,8 @@ export default function FamilyChatRoomScreen() {
   const { patientId } = useLocalSearchParams<{ patientId: string }>();
   const { activePatientId, activePatient } = useActiveCareTarget();
   const { user } = useAuth();
+  const { language } = useLanguage();
+  const t = translations[language];
 
   const targetId = patientId || activePatientId;
 
@@ -87,10 +95,24 @@ export default function FamilyChatRoomScreen() {
     return () => unsubscribe();
   }, [targetId]);
 
+  useEffect(() => {
+    if (!targetId || language === "zh") return;
+
+    messages.forEach((msg) => {
+      if (!msg.text) return;
+      void ensureFirestoreTranslations(
+        doc(db, "chats", targetId, "messages", msg.id),
+        msg,
+        language,
+        [{ baseName: "text", sourceKeys: ["text", "text_original"] }]
+      );
+    });
+  }, [messages, targetId, language]);
+
   const pickImageAndSend = async () => {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permissionResult.granted) {
-      Alert.alert("權限不足", "需要開啟相簿權限才能傳送照片");
+      Alert.alert(t.resultErrorTitle, t.albumPermissionNeeded);
       return;
     }
 
@@ -150,6 +172,8 @@ export default function FamilyChatRoomScreen() {
 
       await setDoc(doc(db, "chats", targetId, "messages", customId), {
         text: inputText,
+        text_zh: inputText,
+        text_original: inputText,
         senderId: user.uid,
         createdAt: serverTimestamp(),
       });
@@ -172,7 +196,11 @@ export default function FamilyChatRoomScreen() {
             <Text style={styles.backIcon}>＜</Text>
           </Pressable>
           <Text style={styles.headerTitle}>
-            {activePatient?.name ? `${activePatient.name} 的看護` : "對話室"}
+            {activePatient?.name
+              ? language === "zh"
+                ? `${activePatient.name}${t.caregiverLabel}`
+                : `${activePatient.name} ${t.caregiverLabel}`
+              : t.chatRoom}
           </Text>
         </View>
         <View style={{ width: 40 }} />
@@ -181,13 +209,13 @@ export default function FamilyChatRoomScreen() {
       {loading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#9999E5" />
-          <Text style={styles.loadingText}>正在載入訊息...</Text>
+          <Text style={styles.loadingText}>{t.loadingMessages}</Text>
         </View>
       ) : messages.length === 0 ? (
         <ScrollView contentContainerStyle={styles.emptyContainer}>
           <Text style={styles.emptyIcon}>💬</Text>
-          <Text style={styles.emptyText}>目前尚無對話紀錄</Text>
-          <Text style={styles.emptySubText}>您可以發送第一則訊息與看護溝通</Text>
+          <Text style={styles.emptyText}>{t.noConversation}</Text>
+          <Text style={styles.emptySubText}>{t.sendFirstMessage}</Text>
         </ScrollView>
       ) : (
         <ScrollView
@@ -196,6 +224,15 @@ export default function FamilyChatRoomScreen() {
         >
           {messages.map((msg) => {
             const isMe = msg.senderId === user?.uid;
+            const localizedText = pickDynamicLocalizedString(
+              msg,
+              "text",
+              language,
+              ["text", "text_original"],
+              msg.text
+            );
+            const originalText = msg.text || msg.text_original || "";
+            const showOriginal = language !== "zh" && localizedText && originalText && localizedText !== originalText;
             return (
               <View
                 key={msg.id}
@@ -204,14 +241,14 @@ export default function FamilyChatRoomScreen() {
                 <View style={[styles.bubble, isMe ? styles.myBubble : styles.otherBubble]}>
                   {msg.imageUrl ? (
                     <Image source={{ uri: msg.imageUrl }} style={styles.sentImage} resizeMode="cover" />
-                  ) : !isMe ? (
+                  ) : showOriginal ? (
                     <>
-                      <Text style={styles.mainText}>{msg.translated || msg.text}</Text>
+                      <Text style={[styles.mainText, isMe && { color: "#FFF" }]}>{localizedText}</Text>
                       <View style={styles.divider} />
-                      <Text style={styles.subText}>{msg.text}</Text>
+                      <Text style={[styles.subText, isMe && { color: "rgba(255,255,255,0.8)" }]}>{originalText}</Text>
                     </>
                   ) : (
-                    <Text style={[styles.mainText, { color: "#FFF" }]}>{msg.text}</Text>
+                    <Text style={[styles.mainText, isMe && { color: "#FFF" }]}>{localizedText || originalText}</Text>
                   )}
                 </View>
                 <Text style={[styles.timeText, { alignSelf: isMe ? "flex-end" : "flex-start" }]}>
@@ -248,7 +285,7 @@ export default function FamilyChatRoomScreen() {
           style={styles.input}
           value={inputText}
           onChangeText={setInputText}
-          placeholder="輸入訊息..."
+          placeholder={t.inputMessage}
           multiline
         />
 

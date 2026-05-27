@@ -1,18 +1,22 @@
 // app/(auth)/login.tsx
 import { useAuth } from "@/src/auth/useAuth";
+import { translations } from "@/src/i18n/translations";
+import { useLanguage } from "@/src/store/LanguageContext";
 import { router, Stack } from "expo-router";
 import { useState } from "react";
 import { ActivityIndicator, Alert, Pressable, Text, TextInput, View } from "react-native";
 
 export default function LoginScreen() {
   const { login } = useAuth();
+  const { language } = useLanguage();
+  const t = translations[language];
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
   async function onLogin() {
     if (!email || !password) {
-      Alert.alert("提示", "請輸入 Email 與密碼");
+      Alert.alert(t.prompt, t.loginRequiredFields);
       return;
     }
     try {
@@ -24,7 +28,7 @@ export default function LoginScreen() {
       //router.replace("/");
       
     } catch (e: any) {
-      Alert.alert("登入失敗", e?.message ?? "帳號或密碼錯誤");
+      Alert.alert(t.loginFailed, e?.message ?? t.loginFailedFallback);
     } finally {
       setLoading(false);
     }
@@ -35,15 +39,15 @@ export default function LoginScreen() {
       <Stack.Screen options={{ headerShown: false }} />
       
       <View style={{ marginBottom: 40 }}>
-        <Text style={{ fontSize: 36, fontWeight: "900", color: "#333" }}>歡迎回來</Text>
-        <Text style={{ fontSize: 16, color: "#666", marginTop: 8 }}>請登入您的照護帳號</Text>
+        <Text style={{ fontSize: 36, fontWeight: "900", color: "#333" }}>{t.welcomeBack}</Text>
+        <Text style={{ fontSize: 16, color: "#666", marginTop: 8 }}>{t.loginSubtitle}</Text>
       </View>
 
       <View style={{ gap: 16 }}>
         <View style={{ gap: 8 }}>
           <Text style={{ fontSize: 14, fontWeight: "800", color: "#666", marginLeft: 4 }}>EMAIL</Text>
           <TextInput
-            placeholder="請輸入 Email"
+            placeholder={t.emailPlaceholder}
             autoCapitalize="none"
             keyboardType="email-address"
             value={email}
@@ -60,9 +64,9 @@ export default function LoginScreen() {
         </View>
 
         <View style={{ gap: 8 }}>
-          <Text style={{ fontSize: 14, fontWeight: "800", color: "#666", marginLeft: 4 }}>密碼</Text>
+          <Text style={{ fontSize: 14, fontWeight: "800", color: "#666", marginLeft: 4 }}>{t.password}</Text>
           <TextInput
-            placeholder="請輸入密碼"
+            placeholder={t.passwordPlaceholder}
             secureTextEntry
             value={password}
             onChangeText={setPassword}
@@ -92,7 +96,7 @@ export default function LoginScreen() {
           {loading ? (
             <ActivityIndicator color="#FFF" />
           ) : (
-            <Text style={{ color: "#FFF", fontSize: 18, fontWeight: "900" }}>立即登入</Text>
+            <Text style={{ color: "#FFF", fontSize: 18, fontWeight: "900" }}>{t.loginNow}</Text>
           )}
         </Pressable>
       </View>
@@ -100,7 +104,7 @@ export default function LoginScreen() {
       <View style={{ marginTop: 32, alignItems: "center" }}>
         <Pressable onPress={() => router.push("/(auth)/register")}>
           <Text style={{ color: "#666", fontSize: 15, fontWeight: "600" }}>
-            沒有帳號嗎？<Text style={{ color: "#007AFF", fontWeight: "900" }}>去註冊</Text>
+            {t.noAccount}<Text style={{ color: "#007AFF", fontWeight: "900" }}>{t.goRegister}</Text>
           </Text>
         </Pressable>
       </View>

@@ -3,6 +3,8 @@ import { View, Text, Pressable, ScrollView, Alert, ActivityIndicator } from "rea
 import { router } from "expo-router";
 import { useAuth } from "@/src/auth/useAuth";
 import { useActiveCareTarget } from "@/src/care-target/useActiveCareTarget"; 
+import { translations } from "@/src/i18n/translations";
+import { useLanguage } from "@/src/store/LanguageContext";
 import * as Clipboard from "expo-clipboard";
 
 type CareTarget = {
@@ -14,6 +16,8 @@ type CareTarget = {
 
 export default function CareTargetSelectScreen() {
   const { user, ready } = useAuth();
+  const { language } = useLanguage();
+  const t = translations[language];
   const {
     ready: ctReady,
     activePatientId,              // ✅ 改這裡
@@ -30,11 +34,11 @@ export default function CareTargetSelectScreen() {
 
   const copyToClipboard = async (code: string | undefined) => {
     if (!code) {
-      Alert.alert("提示", "無邀請碼可複製");
+      Alert.alert(t.prompt, t.noInviteCodeToCopy);
       return;
     }
     await Clipboard.setStringAsync(code);
-    Alert.alert("複製成功", `邀請碼 ${code} 已存入剪貼簿`);
+    Alert.alert(t.copySuccess, `${t.inviteCode} ${code} ${t.inviteCodeCopied}`);
   };
 
   async function pick(id: string) {
@@ -45,7 +49,7 @@ export default function CareTargetSelectScreen() {
       const home = user.role === "caregiver" ? "/caregiver" : "/family";
       router.replace(home as any);
     } catch (e) {
-      Alert.alert("錯誤", "切換對象失敗");
+      Alert.alert(t.resultErrorTitle, t.switchTargetFailed);
     } finally {
       setSubmittingId(null);
     }
@@ -56,7 +60,7 @@ export default function CareTargetSelectScreen() {
   return (
     <ScrollView contentContainerStyle={{ padding: 20, paddingTop:90, gap: 16 }}>
       <Text style={{ fontSize: 28, fontWeight: "900", color: "#333", marginBottom: 8 }}>
-        選擇照顧對象
+        {t.selectCareTarget}
       </Text>
 
       {(linkedCareTargets as CareTarget[]).map((ct) => {
@@ -78,29 +82,29 @@ export default function CareTargetSelectScreen() {
                 <Text style={{ fontSize: 22, fontWeight: "900", color: isSelected ? "#007AFF" : "#333" }}>
                   {ct.name}
                 </Text>
-                {isSelected && <Text style={{ color: "#007AFF", fontWeight: "800" }}>使用中</Text>}
+                {isSelected && <Text style={{ color: "#007AFF", fontWeight: "800" }}>{t.active}</Text>}
               </View>
 
               {ct.notes ? (
                 <Text style={{ color: "#666", fontSize: 14 }} numberOfLines={2}>
-                  備註：{ct.notes}
+                  {t.note}：{ct.notes}
                 </Text>
               ) : (
-                <Text style={{ color: "#CCC", fontSize: 14 }}>無備註</Text>
+                <Text style={{ color: "#CCC", fontSize: 14 }}>{t.noNote}</Text>
               )}
             </Pressable>
 
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, borderTopWidth: 1, borderTopColor: isSelected ? "#C0D1FF" : "#F2F2F7", paddingTop: 10 }}>
               <View style={{ flex: 1, backgroundColor: isSelected ? "#FFF" : "#F2F2F7", padding: 8, borderRadius: 8 }}>
                 <Text style={{ fontSize: 13, fontWeight: "700", color: "#666" }}>
-                  邀請碼：<Text style={{ color: "#007AFF" }}>{ct.inviteCode}</Text>
+                  {t.inviteCode}：<Text style={{ color: "#007AFF" }}>{ct.inviteCode}</Text>
                 </Text>
               </View>
               <Pressable 
                 onPress={() => copyToClipboard(ct.inviteCode)}
                 style={{ backgroundColor: "#007AFF", paddingHorizontal: 15, paddingVertical: 8, borderRadius: 8 }}
               >
-                <Text style={{ color: "#FFF", fontSize: 12, fontWeight: "800" }}>複製</Text>
+                <Text style={{ color: "#FFF", fontSize: 12, fontWeight: "800" }}>{t.copy}</Text>
               </Pressable>
             </View>
           </View>
@@ -112,13 +116,13 @@ export default function CareTargetSelectScreen() {
           onPress={() => router.push("/care-target/create")} 
           style={{ padding: 18, backgroundColor: "#007AFF", borderRadius: 12 }}
         >
-          <Text style={{ color: "#fff", textAlign: "center", fontWeight: "800", fontSize: 16 }}>＋ 新增長輩</Text>
+          <Text style={{ color: "#fff", textAlign: "center", fontWeight: "800", fontSize: 16 }}>{t.addCareTarget}</Text>
         </Pressable>
         <Pressable
           onPress={() => router.push("/care-target/join")}
           style={{ padding: 18, borderWidth: 1, borderColor: "#007AFF",borderRadius: 12, backgroundColor: "#fff"}}
         >
-          <Text style={{ color: "#007AFF", textAlign: "center", fontWeight: "800", fontSize: 16 }}>🔑 輸入邀請碼加入</Text>
+          <Text style={{ color: "#007AFF", textAlign: "center", fontWeight: "800", fontSize: 16 }}>{t.joinByInviteCode}</Text>
         </Pressable>
         <Pressable 
           onPress={() => {
@@ -127,7 +131,7 @@ export default function CareTargetSelectScreen() {
           }} 
           style={{ marginTop: 8, paddingVertical: 10 }}
         >
-          <Text style={{ color: "#666", textAlign: "center", fontWeight: "700" }}>回首頁</Text>
+          <Text style={{ color: "#666", textAlign: "center", fontWeight: "700" }}>{t.home}</Text>
         </Pressable>
       </View>
     </ScrollView>

@@ -7,10 +7,14 @@ import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 // Firebase 相關
 import { db } from '@/firebase/firebaseConfig';
 import { useActiveCareTarget } from '@/src/care-target/useActiveCareTarget';
+import { translations } from '@/src/i18n/translations';
+import { useLanguage } from '@/src/store/LanguageContext';
 import { collection, onSnapshot, orderBy, query, where } from 'firebase/firestore';
 
 export default function FamilyConditionScreen() {
   const { activePatientId } = useActiveCareTarget();
+  const { language } = useLanguage();
+  const t = translations[language];
   
   // 動態隱藏/顯示底部 Tab Bar
   const navigation = useNavigation();
@@ -120,12 +124,12 @@ export default function FamilyConditionScreen() {
   const renderList = () => (
     <View style={styles.viewContainer}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <Text style={styles.listHint}>點擊列表查看長輩的異常狀況紀錄與追蹤。</Text>
+        <Text style={styles.listHint}>{t.conditionHint}</Text>
         
         {records.length === 0 ? (
            <View style={{ alignItems: 'center', marginTop: 50 }}>
              <Ionicons name="clipboard-outline" size={64} color="#CCC" style={{ marginBottom: 12 }} />
-             <Text style={{ color: '#999', fontSize: 16 }}>目前沒有任何異常紀錄</Text>
+             <Text style={{ color: '#999', fontSize: 16 }}>{t.noConditionRecords}</Text>
            </View>
         ) : (
           records.map(record => (
@@ -133,12 +137,12 @@ export default function FamilyConditionScreen() {
               <View style={{ flex: 1 }}>
                 <View style={styles.tagContainer}>
                   {record.type === 'folder' ? (
-                    <Text style={styles.tagFolder}>追蹤資料夾</Text>
+                    <Text style={styles.tagFolder}>{t.trackingFolder}</Text>
                   ) : (
-                    <Text style={styles.tagSingle}>單次紀錄</Text>
+                    <Text style={styles.tagSingle}>{t.singleRecord}</Text>
                   )}
                 </View>
-                <Text style={styles.listTitle} numberOfLines={1}>{record.titleOriginal || '未命名紀錄'}</Text>
+                <Text style={styles.listTitle} numberOfLines={1}>{record.titleOriginal || t.unnamedRecord}</Text>
                 <Text style={styles.listDate}>{record.displayDate}</Text>
               </View>
               <View style={styles.listIconBox}>
@@ -162,7 +166,7 @@ export default function FamilyConditionScreen() {
           <Pressable onPress={() => setIsDoctorMode(!isDoctorMode)} style={[styles.doctorModeBtn, isDoctorMode ? styles.doctorModeBtnActive : styles.doctorModeBtnIdle]}>
             <Ionicons name="language" size={18} color={isDoctorMode ? 'white' : '#666'} />
             <Text style={[styles.doctorModeText, isDoctorMode && { color: 'white' }]}>
-              {isDoctorMode ? '醫師檢視模式 (中文) : ON' : '切換為醫師檢視 (中文)'}
+              {isDoctorMode ? t.doctorModeOn : t.doctorModeSwitch}
             </Text>
           </Pressable>
         </View>
@@ -170,19 +174,19 @@ export default function FamilyConditionScreen() {
         <View style={styles.mediaContainer}>
           {selectedRecord?.hasMedia && selectedRecord?.mediaUrl ? (
             renderMedia(selectedRecord.mediaUrl, selectedRecord.mediaType)
-          ) : (<Text style={{ color: '#999', fontWeight: 'bold' }}>沒有影片/照片</Text>)}
+          ) : (<Text style={{ color: '#999', fontWeight: 'bold' }}>{t.noMedia}</Text>)}
         </View>
 
         <View style={styles.detailHeaderRow}>
-          <Text style={styles.detailTitle}>{isDoctorMode ? (selectedRecord?.titleZh || 'AI 翻譯處理中...') : selectedRecord?.titleOriginal}</Text>
+          <Text style={styles.detailTitle}>{isDoctorMode ? (selectedRecord?.titleZh || t.aiTranslating) : selectedRecord?.titleOriginal}</Text>
         </View>
 
         <Text style={styles.detailDate}>{selectedRecord?.displayDate}</Text>
         
         <View style={styles.noteBox}>
-          <Text style={styles.noteTitle}>備註：</Text>
+          <Text style={styles.noteTitle}>{t.note}：</Text>
           <Text style={[styles.noteText, isDoctorMode && { fontSize: 18 }]}>
-            {isDoctorMode ? (selectedRecord?.notesZh || 'AI 翻譯處理中...') : selectedRecord?.notesOriginal}
+            {isDoctorMode ? (selectedRecord?.notesZh || t.aiTranslating) : selectedRecord?.notesOriginal}
           </Text>
         </View>
       </ScrollView>
@@ -195,21 +199,21 @@ export default function FamilyConditionScreen() {
         <View style={styles.doctorModeRow}>
           <Pressable onPress={() => setIsDoctorMode(!isDoctorMode)} style={[styles.doctorModeBtn, isDoctorMode ? styles.doctorModeBtnActive : styles.doctorModeBtnIdle]}>
             <Ionicons name="language" size={18} color={isDoctorMode ? 'white' : '#666'} />
-            <Text style={[styles.doctorModeText, isDoctorMode && { color: 'white' }]}>{isDoctorMode ? '中文模式 : ON' : '切換中文'}</Text>
+            <Text style={[styles.doctorModeText, isDoctorMode && { color: 'white' }]}>{isDoctorMode ? t.chineseModeOn : t.switchChinese}</Text>
           </Pressable>
         </View>
 
         <View style={styles.folderHeader}>
           <Ionicons name="folder-open" size={36} color="#7BC6F9" style={{ marginRight: 12 }} />
           <View style={{ flex: 1 }}>
-            <Text style={styles.detailTitle}>{isDoctorMode ? (selectedRecord?.titleZh || 'AI 翻譯處理中...') : selectedRecord?.titleOriginal}</Text>
-            <Text style={styles.detailDate}>建立於: {selectedRecord?.displayDate}</Text>
+            <Text style={styles.detailTitle}>{isDoctorMode ? (selectedRecord?.titleZh || t.aiTranslating) : selectedRecord?.titleOriginal}</Text>
+            <Text style={styles.detailDate}>{t.createdAt}: {selectedRecord?.displayDate}</Text>
           </View>
         </View>
 
         {(!selectedRecord?.entries || selectedRecord?.entries.length === 0) && (
           <View style={{ alignItems: 'center', marginTop: 30, padding: 20, backgroundColor: '#FFF4E5', borderRadius: 12 }}>
-            <Text style={{ color: '#D37B2B', fontWeight: 'bold' }}>目前資料夾內尚無追蹤紀錄</Text>
+            <Text style={{ color: '#D37B2B', fontWeight: 'bold' }}>{t.emptyFolder}</Text>
           </View>
         )}
 
@@ -234,8 +238,8 @@ export default function FamilyConditionScreen() {
                     ) : <Ionicons name="document-text" size={32} color="#CCC" />}
                   </View>
                   <View style={{ flex: 1, justifyContent: 'center' }}>
-                    <Text style={styles.timelineNotes} numberOfLines={2}>{isDoctorMode ? (entry.notesZh || 'AI 翻譯中...') : entry.notesOriginal}</Text>
-                    <Text style={styles.timelineMore}>查看詳情 ➔</Text>
+                    <Text style={styles.timelineNotes} numberOfLines={2}>{isDoctorMode ? (entry.notesZh || t.aiTranslatingShort) : entry.notesOriginal}</Text>
+                    <Text style={styles.timelineMore}>{t.viewMore}</Text>
                   </View>
                 </View>
               </Pressable>
@@ -256,29 +260,29 @@ export default function FamilyConditionScreen() {
           <View style={styles.doctorModeRow}>
             <Pressable onPress={() => setIsDoctorMode(!isDoctorMode)} style={[styles.doctorModeBtn, isDoctorMode ? styles.doctorModeBtnActive : styles.doctorModeBtnIdle]}>
               <Ionicons name="language" size={18} color={isDoctorMode ? 'white' : '#666'} />
-              <Text style={[styles.doctorModeText, isDoctorMode && { color: 'white' }]}>{isDoctorMode ? '中文模式 : ON' : '切換中文'}</Text>
+              <Text style={[styles.doctorModeText, isDoctorMode && { color: 'white' }]}>{isDoctorMode ? t.chineseModeOn : t.switchChinese}</Text>
             </Pressable>
           </View>
 
           <View style={styles.folderBadge}>
             <Ionicons name="folder" size={16} color="#E59752" style={{ marginRight: 6 }} />
-            <Text style={styles.folderBadgeText}>來自資料夾：{isDoctorMode ? (selectedRecord?.titleZh || selectedRecord?.titleOriginal) : selectedRecord?.titleOriginal}</Text>
+            <Text style={styles.folderBadgeText}>{t.fromFolder}：{isDoctorMode ? (selectedRecord?.titleZh || selectedRecord?.titleOriginal) : selectedRecord?.titleOriginal}</Text>
           </View>
 
           <View style={styles.mediaContainer}>
-             {selectedFolderEntry?.mediaUrl ? renderMedia(selectedFolderEntry.mediaUrl, selectedFolderEntry.mediaType) : <Text style={{ color: '#999', fontWeight: 'bold' }}>無相片</Text>}
+             {selectedFolderEntry?.mediaUrl ? renderMedia(selectedFolderEntry.mediaUrl, selectedFolderEntry.mediaType) : <Text style={{ color: '#999', fontWeight: 'bold' }}>{t.noPhoto}</Text>}
           </View>
 
           <View style={styles.detailHeaderRow}>
-            <Text style={styles.detailTitle}>紀錄時間：</Text>
+            <Text style={styles.detailTitle}>{t.recordTime}：</Text>
           </View>
 
           <Text style={styles.detailDate}>{eDateStr}</Text>
           
           <View style={styles.noteBox}>
-            <Text style={styles.noteTitle}>備註：</Text>
+            <Text style={styles.noteTitle}>{t.note}：</Text>
             <Text style={[styles.noteText, isDoctorMode && { fontSize: 18 }]}>
-              {isDoctorMode ? (selectedFolderEntry?.notesZh || 'AI 翻譯處理中...') : selectedFolderEntry?.notesOriginal}
+              {isDoctorMode ? (selectedFolderEntry?.notesZh || t.aiTranslating) : selectedFolderEntry?.notesOriginal}
             </Text>
           </View>
         </ScrollView>
@@ -300,7 +304,7 @@ export default function FamilyConditionScreen() {
             style={styles.backBtn}
           >
             <Ionicons name="chevron-back" size={28} color="black" />
-            <Text style={styles.headerTitle}>狀況查看</Text>
+            <Text style={styles.headerTitle}>{t.conditionView}</Text>
           </Pressable>
         </View>
       </View>

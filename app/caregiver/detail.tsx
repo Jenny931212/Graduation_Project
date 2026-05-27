@@ -4,9 +4,13 @@ import { router, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { collection, doc, getDoc, getDocs, query } from "firebase/firestore";
 import { Ionicons } from "@expo/vector-icons";
 import { db } from "@/firebase/firebaseConfig";
+import { pickLocalizedString, translations } from "@/src/i18n/translations";
+import { useLanguage } from "@/src/store/LanguageContext";
 
 export default function CaregiverDetailScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
+  const { language } = useLanguage();
+  const t = translations[language];
   const [p, setP] = useState<any | null>(null);
   const [items, setItems] = useState<any[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -33,19 +37,19 @@ export default function CaregiverDetailScreen() {
         const it = d.data() as any;
         return {
           itemId: d.id,
-          drug_name: it.drug_name_zh ?? it.drug_name ?? "",
+          drug_name: pickLocalizedString(it, "drug_name", language),
           dosage: it.dose ?? it.dosage ?? "",
-          usage_zh: it.usage_zh ?? it.usage ?? it.time_of_day ?? it.time ?? "",
-          memo: it.note_zh ?? it.memo ?? it.note ?? "",
+          usage_zh: pickLocalizedString(it, "usage", language, it.time_of_day ?? it.time ?? ""),
+          memo: pickLocalizedString(it, "note", language),
         };
       });
       setItems(list);
       setLoaded(true);
     } catch (e) {
       setLoaded(true);
-      Alert.alert("讀取失敗", "無法讀取藥單資料");
+      Alert.alert(t.resultReadFailedTitle, t.resultReadFailedMessage);
     }
-  }, [id]);
+  }, [id, language, t]);
 
   useFocusEffect(
     useCallback(() => {
@@ -53,8 +57,8 @@ export default function CaregiverDetailScreen() {
     }, [fetchData])
   );
 
-  if (!loaded) return <View style={styles.center}><Text>讀取中...</Text></View>;
-  if (!id || !p) return <View style={styles.center}><Text>找不到資料</Text></View>;
+  if (!loaded) return <View style={styles.center}><Text>{t.reading}</Text></View>;
+  if (!id || !p) return <View style={styles.center}><Text>{t.resultNotFound}</Text></View>;
 
   return (
     <View style={styles.container}>
@@ -62,21 +66,21 @@ export default function CaregiverDetailScreen() {
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="chevron-back" size={28} color="#333" />
-          <Text style={styles.backText}>返回</Text>
+          <Text style={styles.backText}>{t.back}</Text>
         </Pressable>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.titleRow}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.mainTitle}>{p.title || "藥單詳情"}</Text>
+            <Text style={styles.mainTitle}>{p.title || t.prescriptionDetail}</Text>
             <Text style={styles.subInfo}>
-              錄入日期：{
+              {t.recordDate}：{
                 typeof p.createdAt === "string"
                   ? p.createdAt
                   : (p.createdAt?.seconds
                       ? new Date(p.createdAt.seconds * 1000).toLocaleDateString()
-                      : "未知")
+                      : t.unknown)
               }
             </Text>
           </View>
@@ -87,7 +91,7 @@ export default function CaregiverDetailScreen() {
             })}
             style={styles.editBtn}
           >
-            <Text style={styles.editBtnText}>編輯</Text>
+            <Text style={styles.editBtnText}>{t.edit}</Text>
           </Pressable>
         </View>
 
@@ -95,19 +99,19 @@ export default function CaregiverDetailScreen() {
           <Image source={{ uri: p.sourceImageUrl }} style={styles.img} resizeMode="contain" />
         )}
 
-        <Text style={styles.sectionTitle}>藥品明細</Text>
+        <Text style={styles.sectionTitle}>{t.medicineDetails}</Text>
         {items.map((it, idx) => {
           const usageParts = it.usage_zh?.split(",") || [it.usage_zh, ""];
-          const method = usageParts[0] || "未設定";
-          const timeDetail = usageParts.slice(1).join(",") || "依醫囑服用";
+          const method = usageParts[0] || t.notSet;
+          const timeDetail = usageParts.slice(1).join(",") || t.asDirectedUsage;
 
           return (
             <View key={it.itemId ?? idx} style={styles.itemCard}>
               <Text style={styles.itemName}>{it.drug_name}</Text>
-              <View style={styles.infoRow}><Text style={styles.infoLabel}>藥物劑量：</Text><Text style={styles.infoValue}>{it.dosage}</Text></View>
-              <View style={styles.infoRow}><Text style={styles.infoLabel}>使用方式：</Text><Text style={styles.infoValue}>{method}</Text></View>
-              <View style={styles.infoRow}><Text style={styles.infoLabel}>服用時段：</Text><Text style={styles.infoValue}>{timeDetail}</Text></View>
-              {it.memo ? <Text style={styles.itemNote}>備註：{it.memo}</Text> : null}
+              <View style={styles.infoRow}><Text style={styles.infoLabel}>{t.dosage}：</Text><Text style={styles.infoValue}>{it.dosage}</Text></View>
+              <View style={styles.infoRow}><Text style={styles.infoLabel}>{t.method}：</Text><Text style={styles.infoValue}>{method}</Text></View>
+              <View style={styles.infoRow}><Text style={styles.infoLabel}>{t.usageTime}：</Text><Text style={styles.infoValue}>{timeDetail}</Text></View>
+              {it.memo ? <Text style={styles.itemNote}>{t.note}：{it.memo}</Text> : null}
             </View>
           );
         })}

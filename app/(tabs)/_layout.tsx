@@ -7,10 +7,14 @@ import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 
 import { useAuth } from "@/src/auth/useAuth";
+import { translations } from "@/src/i18n/translations";
+import { useLanguage } from "@/src/store/LanguageContext";
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
   const {ready , user } = useAuth();
+  const { language } = useLanguage();
+  const t = translations[language];
 
   // ✅ 等待本機登入狀態 hydrate 完再決定要不要進 Tabs
   if (ready) return null;
@@ -29,7 +33,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: "Home",
+          title: t.home,
           tabBarIcon: ({ color }) => (
             <IconSymbol size={28} name="house.fill" color={color} />
           ),
@@ -38,7 +42,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="explore"
         options={{
-          title: "Explore",
+          title: t.handbook,
           tabBarIcon: ({ color }) => (
             <IconSymbol size={28} name="paperplane.fill" color={color} />
           ),

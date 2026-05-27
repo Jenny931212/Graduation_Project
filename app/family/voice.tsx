@@ -9,6 +9,8 @@ import { ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, Tex
 import { db } from '@/firebase/firebaseConfig';
 import { useAuth } from '@/src/auth/useAuth';
 import { useActiveCareTarget } from '@/src/care-target/useActiveCareTarget';
+import { translations } from '@/src/i18n/translations';
+import { useLanguage } from '@/src/store/LanguageContext';
 import { collection, deleteDoc, doc, onSnapshot, query, serverTimestamp, setDoc, where } from 'firebase/firestore';
 import { deleteObject, getDownloadURL, getStorage, ref, uploadBytes } from 'firebase/storage';
 
@@ -27,7 +29,19 @@ const initialTasks = [
 export default function FamilyVoiceScreen() {
   const { user } = useAuth();
   const { activePatientId } = useActiveCareTarget();
+  const { language } = useLanguage();
+  const t = translations[language];
   const storage = getStorage();
+  const taskTitles: Record<number, string> = {
+    1: t.voiceTaskMedication,
+    2: t.voiceTaskMeal,
+    3: t.voiceTaskShower,
+    4: t.voiceTaskDrinkWater,
+    5: t.voiceTaskExercise,
+    6: t.voiceTaskToilet,
+    7: t.voiceTaskSleep,
+    8: t.voiceTaskEmotion,
+  };
 
   // 畫面上的任務列表，會與 Firebase 同步
   const [tasks, setTasks] = useState<any[]>(initialTasks.map(t => ({ ...t, hasRecording: false })));
@@ -138,7 +152,7 @@ export default function FamilyVoiceScreen() {
     try {
       const permission = await Audio.requestPermissionsAsync();
       if (permission.status !== 'granted') {
-        Alert.alert('權限不足', '請允許麥克風權限以錄製語音。');
+        Alert.alert(t.resultErrorTitle, t.micPermissionNeeded);
         return;
       }
       // 💡 錄音前：開啟錄音模式
@@ -247,7 +261,7 @@ export default function FamilyVoiceScreen() {
         }
       });
     } catch (error) {
-      Alert.alert("錯誤", "無法播放語音");
+      Alert.alert(t.resultErrorTitle, t.playVoiceFailed);
       setPlayingTaskId(null);
     }
   };
@@ -255,10 +269,10 @@ export default function FamilyVoiceScreen() {
   const handleDeleteRecord = async (task: any) => {
     if (!task.docId) return;
 
-    Alert.alert('刪除確認', `確定要刪除「${task.title}」的語音提醒嗎？`, [
-      { text: '取消', style: 'cancel' },
+    Alert.alert(t.deleteConfirmTitle, `${t.deleteVoiceMessage}\n${taskTitles[task.id] ?? task.title}`, [
+      { text: t.cancel, style: 'cancel' },
       { 
-        text: '刪除', 
+        text: t.delete, 
         style: 'destructive', 
         onPress: async () => {
           try {
@@ -275,7 +289,7 @@ export default function FamilyVoiceScreen() {
               setPlayingTaskId(null);
             }
           } catch (error) {
-            Alert.alert('錯誤', '刪除失敗');
+            Alert.alert(t.resultErrorTitle, t.deleteFailedShort);
           }
         } 
       }
@@ -287,7 +301,7 @@ export default function FamilyVoiceScreen() {
   // ==========================================
   const handleSaveRecord = async () => {
     if (!audioUri || !user || !activePatientId || !recordingTask) {
-      Alert.alert('提示', '請先錄製一段語音再儲存喔！');
+      Alert.alert(t.prompt, t.recordBeforeSave);
       return;
     }
 
@@ -315,7 +329,7 @@ export default function FamilyVoiceScreen() {
         createdAt: serverTimestamp(),
       });
 
-      Alert.alert('儲存成功', '語音已上傳！');
+      Alert.alert(t.saveSuccessTitle, t.voiceUploaded);
       
       setRecordingTask(null);
       setIsRecording(false);
@@ -323,7 +337,7 @@ export default function FamilyVoiceScreen() {
       setAudioUri(null);
     } catch (error) {
       console.error('Upload failed:', error);
-      Alert.alert('上傳失敗', '請檢查網路連線後再試一次');
+      Alert.alert(t.uploadFailedTitle, t.uploadFailedMessage);
     } finally {
       setIsUploading(false);
     }
@@ -344,7 +358,7 @@ export default function FamilyVoiceScreen() {
         <View style={styles.headerRow}>
           <Pressable onPress={() => router.back()} style={styles.backBtn}>
             <Ionicons name="chevron-back" size={30} color="black" />
-            <Text style={styles.backBtnText}>返回</Text>
+            <Text style={styles.backBtnText}>{t.back}</Text>
           </Pressable>
         </View>
       </View>
@@ -361,7 +375,7 @@ export default function FamilyVoiceScreen() {
               </View>
               
               <View style={styles.taskInfo}>
-                <Text style={styles.taskTitle}>{task.title}</Text>
+                <Text style={styles.taskTitle}>{taskTitles[task.id] ?? task.title}</Text>
                 <View style={styles.statusArea}>
                   {task.hasRecording ? (
                     // 💡 有錄音時，顯示播放鍵與音波
@@ -386,7 +400,7 @@ export default function FamilyVoiceScreen() {
                       </View>
                     </Pressable>
                   ) : (
-                    <Text style={styles.statusEmpty}>尚未錄音</Text>
+                    <Text style={styles.statusEmpty}>{t.notRecorded}</Text>
                   )}
                 </View>
               </View>
@@ -425,9 +439,9 @@ export default function FamilyVoiceScreen() {
               <Ionicons name="close" size={28} color="#666" />
             </Pressable>
 
-            <Text style={styles.modalTitle}>錄製語音: {recordingTask.title}</Text>
+            <Text style={styles.modalTitle}>{t.recordVoiceFor}: {taskTitles[recordingTask.id] ?? recordingTask.title}</Text>
             <Text style={styles.modalSubtitle}>
-              {isPlayingModal ? "試聽中..." : isRecording ? "錄音中... 再次點擊暫停" : "點擊下方麥克風開始錄音"}
+              {isPlayingModal ? t.previewing : isRecording ? t.recordingHint : t.tapMicToRecord}
             </Text>
 
             <Pressable 
@@ -452,7 +466,7 @@ export default function FamilyVoiceScreen() {
                 onPress={togglePreview}
                 disabled={recordTime === 0 || isRecording}
               >
-                <Text style={styles.actionBtnText}>{isPlayingModal ? '停止試聽' : '試聽'}</Text>
+                <Text style={styles.actionBtnText}>{isPlayingModal ? t.stopPreview : t.preview}</Text>
               </Pressable>
 
               <Pressable 
@@ -463,7 +477,7 @@ export default function FamilyVoiceScreen() {
                 {isUploading ? (
                   <ActivityIndicator color="#FFF" />
                 ) : (
-                  <Text style={styles.actionBtnText}>儲存</Text>
+                  <Text style={styles.actionBtnText}>{t.save}</Text>
                 )}
               </Pressable>
             </View>

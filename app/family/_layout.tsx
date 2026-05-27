@@ -1,5 +1,7 @@
 // app/family/_layout.tsx
 import { auth } from "@/firebase/firebaseConfig";
+import { translations } from "@/src/i18n/translations";
+import { useLanguage } from "@/src/store/LanguageContext";
 import { Ionicons } from "@expo/vector-icons";
 import { Stack, router, useSegments } from "expo-router";
 import { signOut } from "firebase/auth";
@@ -14,6 +16,8 @@ export default function FamilyLayout() {
   const segments = useSegments() as string[];
   const currentPage = segments[segments.length - 1];
   const insets = useSafeAreaInsets();
+  const { language, setLanguage } = useLanguage();
+  const t = translations[language];
 
   const hideBottomNavRoutes = [
     "chat-room",
@@ -49,10 +53,10 @@ export default function FamilyLayout() {
   });
 
   const handleLogout = () => {
-    Alert.alert("登出系統", "確定要登出目前帳號嗎？", [
-      { text: "取消", style: "cancel" },
+    Alert.alert(t.logout, t.logoutMessage, [
+      { text: t.cancel, style: "cancel" },
       {
-        text: "確定登出",
+        text: t.logoutConfirm,
         style: "destructive",
         onPress: async () => {
           try {
@@ -61,11 +65,16 @@ export default function FamilyLayout() {
             router.replace("/");
           } catch (error) {
             console.log("登出失敗:", error);
-            Alert.alert("錯誤", "登出失敗，請稍後再試");
+            Alert.alert(t.resultErrorTitle, t.logoutFailed);
           }
         },
       },
     ]);
+  };
+
+  const changeLanguage = (nextLanguage: "zh" | "en" | "vi" | "id") => {
+    setLanguage(nextLanguage);
+    setIsSidebarOpen(false);
   };
 
   return (
@@ -121,27 +130,49 @@ export default function FamilyLayout() {
       >
         <View style={styles.badgeContainer}>
           <View style={[styles.badge, { backgroundColor: "#F5A623" }]}>
-            <Text style={styles.badgeText}>家屬模式</Text>
+            <Text style={styles.badgeText}>{t.familyMode}</Text>
           </View>
         </View>
 
         <View style={styles.menuContainer}>
-          <Pressable style={styles.menuItem} onPress={() => Alert.alert("提示", "語言切換開發中")}>
-            <Text style={styles.menuItemText}>語言</Text>
+          <View style={styles.menuItem}>
+            <Text style={styles.menuItemText}>{t.language}</Text>
+            <View style={styles.languageOptions}>
+              <Pressable onPress={() => changeLanguage("zh")}>
+                <Text style={[styles.languageOption, language === "zh" && styles.languageOptionActive]}>
+                  中文
+                </Text>
+              </Pressable>
+              <Pressable onPress={() => changeLanguage("en")}>
+                <Text style={[styles.languageOption, language === "en" && styles.languageOptionActive]}>
+                  English
+                </Text>
+              </Pressable>
+              <Pressable onPress={() => changeLanguage("vi")}>
+                <Text style={[styles.languageOption, language === "vi" && styles.languageOptionActive]}>
+                  Tiếng Việt
+                </Text>
+              </Pressable>
+              <Pressable onPress={() => changeLanguage("id")}>
+                <Text style={[styles.languageOption, language === "id" && styles.languageOptionActive]}>
+                  Bahasa Indonesia
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+          <Pressable style={styles.menuItem} onPress={() => Alert.alert(t.prompt, t.manualComingSoon)}>
+            <Text style={styles.menuItemText}>{t.handbook}</Text>
           </Pressable>
-          <Pressable style={styles.menuItem} onPress={() => Alert.alert("提示", "看護手冊開發中")}>
-            <Text style={styles.menuItemText}>看護手冊</Text>
-          </Pressable>
-          <Pressable style={styles.menuItem} onPress={() => Alert.alert("提示", "緊急電話設置開發中")}>
-            <Text style={styles.menuItemText}>緊急電話設置</Text>
+          <Pressable style={styles.menuItem} onPress={() => Alert.alert(t.prompt, t.emergencyPhoneComingSoon)}>
+            <Text style={styles.menuItemText}>{t.emergencyPhoneSettings}</Text>
           </Pressable>
 
-          <Pressable style={styles.menuItem} onPress={() => Alert.alert("警告", "確定要解除連結嗎？")}>
-            <Text style={styles.menuItemTextDanger}>解除連結</Text>
+          <Pressable style={styles.menuItem} onPress={() => Alert.alert(t.warning, t.unlinkConfirm)}>
+            <Text style={styles.menuItemTextDanger}>{t.unlink}</Text>
           </Pressable>
 
           <Pressable style={styles.menuItem} onPress={handleLogout}>
-            <Text style={styles.menuItemTextDanger}>登出系統</Text>
+            <Text style={styles.menuItemTextDanger}>{t.logout}</Text>
           </Pressable>
         </View>
       </Animated.View>
@@ -224,6 +255,18 @@ const styles = StyleSheet.create({
     color: "#000",
     fontSize: 19,
     fontWeight: "bold",
+  },
+  languageOptions: {
+    marginTop: 10,
+    gap: 8,
+  },
+  languageOption: {
+    color: "#555",
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  languageOptionActive: {
+    color: "#007AFF",
   },
   menuItemTextDanger: {
     color: "#E33B3B",

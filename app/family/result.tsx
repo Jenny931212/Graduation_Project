@@ -23,6 +23,8 @@ import {
 } from "firebase/firestore";
 import { db } from "@/firebase/firebaseConfig";
 import { useActiveCareTarget } from "@/src/care-target/useActiveCareTarget";
+import { pickLocalizedString, translations } from "@/src/i18n/translations";
+import { useLanguage } from "@/src/store/LanguageContext";
 
 // ✅ 1. 確保 time 是字串陣列（UI 需要）
 type Item = { name: string; dose: string; time: string[]; note: string; quantity?: string };
@@ -60,6 +62,8 @@ export default function ResultScreen() {
   }>();
 
   const { activePatientId } = useActiveCareTarget();
+  const { language } = useLanguage();
+  const t = translations[language];
 
   const editedItems = useMemo(() => safeParseItems(itemsJson), [itemsJson]);
 
@@ -94,7 +98,7 @@ export default function ResultScreen() {
         const presSnap = await getDoc(presRef);
 
         if (!presSnap.exists()) {
-          Alert.alert("錯誤", "找不到藥單資料");
+          Alert.alert(t.resultErrorTitle, t.resultNotFound);
           router.replace("/family/list");
           return;
         }
@@ -115,10 +119,10 @@ export default function ResultScreen() {
           const raw = d.data() as any;
           const it = {
             ...raw,
-            drug_name_zh: raw.drug_name_zh ?? raw.drug_name ?? "",
+            drug_name_zh: pickLocalizedString(raw, "drug_name", language),
             dose: raw.dose ?? raw.dosage ?? "",
-            usage: raw.usage_zh ?? raw.usage ?? "",
-            note_zh: raw.note_zh ?? raw.memo ?? raw.note ?? "",
+            usage: pickLocalizedString(raw, "usage", language),
+            note_zh: pickLocalizedString(raw, "note", language),
           };
 
           // 你現在正規欄位是 usage（文字），time 這裡保持 UI 需要的 string[]
@@ -129,7 +133,7 @@ export default function ResultScreen() {
             [];
 
           return {
-            name: it.drug_name_zh ?? "",
+            name: it.drug_name_zh || t.unknownMedicine,
             dose: it.dose ?? "",
             quantity: it.quantity ?? "",
             time: timeArr,
@@ -141,7 +145,7 @@ export default function ResultScreen() {
         setStatus("done");
       } catch (e) {
         console.log("family result read error:", e);
-        Alert.alert("讀取失敗", "無法讀取藥單資料");
+        Alert.alert(t.resultReadFailedTitle, t.resultReadFailedMessage);
         router.replace("/family/list");
       }
     })();
@@ -163,11 +167,11 @@ export default function ResultScreen() {
   // ✅ 以 Firestore 為主：更新主文件 + 重寫 items 子集合
   const onConfirmSave = async () => {
     if (!activePatientId) {
-      Alert.alert("錯誤", "請先選擇長輩");
+      Alert.alert(t.resultErrorTitle, t.resultNoPatient);
       return;
     }
     if (!id) {
-      Alert.alert("錯誤", "缺少藥單 ID，無法儲存");
+      Alert.alert(t.resultErrorTitle, t.resultMissingId);
       return;
     }
 
@@ -203,12 +207,12 @@ export default function ResultScreen() {
 
       await batch.commit();
 
-      Alert.alert("成功", "紀錄已更新", [
-        { text: "確定", onPress: () => router.replace("/family/list") },
+      Alert.alert(t.success, t.saveSuccessMessage, [
+        { text: t.confirm, onPress: () => router.replace("/family/list") },
       ]);
     } catch (e) {
       console.log("family result save error:", e);
-      Alert.alert("儲存失敗");
+      Alert.alert(t.resultSaveFailedTitle);
     } finally {
       setSubmitting(false);
     }
@@ -217,7 +221,7 @@ export default function ResultScreen() {
   return (
     <ScrollView contentContainerStyle={{ padding: 20, paddingTop: 90, gap: 16 }}>
       <Text style={{ fontSize: 24, fontWeight: "900", color: "#333" }}>
-        {status === "loading" ? "解析中..." : "確認藥單資訊"}
+        {status === "loading" ? t.resultLoadingTitle : t.resultDoneTitle}
       </Text>
 
       {finalImageUri && (
@@ -236,16 +240,16 @@ export default function ResultScreen() {
       {status === "loading" ? (
         <View style={{ padding: 40, alignItems: "center" }}>
           <ActivityIndicator size="large" color="#007AFF" />
-          <Text style={{ marginTop: 10, opacity: 0.6 }}>AI 正在努力解析中...</Text>
+          <Text style={{ marginTop: 10, opacity: 0.6 }}>{t.resultAiLoading}</Text>
         </View>
       ) : (
         <View style={{ gap: 12 }}>
           <View style={{ gap: 6 }}>
-            <Text style={{ fontWeight: "800", fontSize: 16 }}>紀錄標題</Text>
+            <Text style={{ fontWeight: "800", fontSize: 16 }}>{t.recordTitle}</Text>
             <TextInput
               value={title}
               onChangeText={setTitle}
-              placeholder="例如：1/18 診所感冒藥"
+              placeholder={t.recordTitlePlaceholder}
               style={{
                 borderWidth: 1,
                 borderColor: "#ccc",
@@ -256,7 +260,7 @@ export default function ResultScreen() {
             />
           </View>
 
-          <Text style={{ fontSize: 18, fontWeight: "800", marginTop: 8 }}>藥品明細</Text>
+          <Text style={{ fontSize: 18, fontWeight: "800", marginTop: 8 }}>{t.medicineDetails}</Text>
 
           {items.map((it, idx) => (
             <View
@@ -274,9 +278,9 @@ export default function ResultScreen() {
                 {it.name}
               </Text>
               <View style={{ gap: 2 }}>
-                <Text style={{ fontSize: 15, color: "#444" }}>用法劑量：{it.dose}</Text>
+                <Text style={{ fontSize: 15, color: "#444" }}>{t.dosage}：{it.dose}</Text>
                 <Text style={{ fontSize: 15, color: "#444" }}>
-                  服用時段：{it.time.map((t) => TIME_LABELS[t] || t).join(", ")}
+                  {t.usageTime}：{it.time.map((time) => TIME_LABELS[time] || time).join(", ")}
                 </Text>
                 <Text
                   style={{
@@ -285,7 +289,7 @@ export default function ResultScreen() {
                     marginTop: 2,
                   }}
                 >
-                  備註：{it.note && it.note.trim() !== "" ? it.note : "無"}
+                  {t.note}：{it.note && it.note.trim() !== "" ? it.note : t.none}
                 </Text>
               </View>
             </View>
@@ -297,7 +301,7 @@ export default function ResultScreen() {
               style={{ padding: 16, borderWidth: 1, borderColor: "#007AFF", borderRadius: 12 }}
             >
               <Text style={{ color: "#007AFF", textAlign: "center", fontWeight: "700" }}>
-                回編輯頁修正
+                {t.edit}
               </Text>
             </Pressable>
 
@@ -311,7 +315,7 @@ export default function ResultScreen() {
               }}
             >
               <Text style={{ color: "#fff", textAlign: "center", fontWeight: "800", fontSize: 18 }}>
-                儲存更新
+                {t.updateSave}
               </Text>
             </Pressable>
           </View>

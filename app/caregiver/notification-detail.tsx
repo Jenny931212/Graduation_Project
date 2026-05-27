@@ -4,6 +4,12 @@ import {
   NOTIFICATIONS_COLLECTION,
   type NotificationDocument,
 } from "@/src/notifications/notificationSchema";
+import {
+  ensureFirestoreTranslations,
+  pickDynamicLocalizedString,
+} from "@/src/i18n/dynamicTranslation";
+import { translations } from "@/src/i18n/translations";
+import { useLanguage } from "@/src/store/LanguageContext";
 import { doc, getDoc } from "firebase/firestore";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
@@ -67,6 +73,8 @@ function buildDetailBody(data: NotificationDetail | null) {
 export default function CaregiverNotificationDetailScreen() {
   const params = useLocalSearchParams<Record<string, string | string[]>>();
   const { user: currentUser } = useAuth();
+  const { language } = useLanguage();
+  const t = translations[language];
   const notificationId = firstValue(params.id);
   const [notification, setNotification] = useState<NotificationDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -77,7 +85,7 @@ export default function CaregiverNotificationDetailScreen() {
 
     async function loadNotification() {
       if (!notificationId) {
-        setErrorText("找不到通知。");
+        setErrorText(t.notFoundNotification);
         setLoading(false);
         return;
       }
@@ -93,23 +101,34 @@ export default function CaregiverNotificationDetailScreen() {
 
         if (!snap.exists()) {
           setNotification(null);
-          setErrorText("找不到通知。");
+          setErrorText(t.notFoundNotification);
           return;
         }
 
         const data = snap.data() as NotificationDetail;
         if (data.recipientUid !== currentUser.uid) {
           setNotification(null);
-          setErrorText("你沒有權限查看這則通知。");
+          setErrorText(t.noPermissionNotification);
           return;
         }
 
-        setNotification(data);
+        const translatedFields = await ensureFirestoreTranslations(
+          doc(db, NOTIFICATIONS_COLLECTION, notificationId),
+          data,
+          language,
+          [
+            { baseName: "title", sourceKeys: ["title"] },
+            { baseName: "body", sourceKeys: ["body"] },
+          ]
+        );
+
+        if (!alive) return;
+        setNotification({ ...data, ...translatedFields });
       } catch (error) {
         console.log("caregiver notification detail load failed:", error);
         if (alive) {
           setNotification(null);
-          setErrorText("通知讀取失敗。");
+          setErrorText(t.notificationReadFailed);
         }
       } finally {
         if (alive) setLoading(false);
@@ -121,9 +140,23 @@ export default function CaregiverNotificationDetailScreen() {
     return () => {
       alive = false;
     };
-  }, [currentUser?.uid, notificationId]);
+  }, [currentUser?.uid, notificationId, language, t]);
 
   const displayBody = useMemo(() => buildDetailBody(notification), [notification]);
+  const displayTitle = pickDynamicLocalizedString(
+    notification,
+    "title",
+    language,
+    ["title"],
+    t.notification
+  );
+  const localizedBody = pickDynamicLocalizedString(
+    notification,
+    "body",
+    language,
+    ["body"],
+    displayBody
+  );
   const displayTime =
     pickText(notification, ["time", "scheduleTime", "eventTime"]) ||
     formatCreatedAt(notification?.createdAt);
@@ -132,23 +165,23 @@ export default function CaregiverNotificationDetailScreen() {
     <View style={styles.container}>
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} hitSlop={12} style={styles.backButton}>
-          <Text style={styles.backText}>‹ 返回</Text>
+          <Text style={styles.backText}>‹ {t.back}</Text>
         </Pressable>
         <Text style={styles.menuIcon}>☰</Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {loading ? (
-          <Text style={styles.messageText}>讀取中...</Text>
+          <Text style={styles.messageText}>{t.reading}</Text>
         ) : errorText ? (
           <Text style={styles.messageText}>{errorText}</Text>
         ) : (
           <>
             <View style={styles.titleRow}>
-              <Text style={styles.title}>{notification?.title || "通知"}</Text>
+              <Text style={styles.title}>{displayTitle}</Text>
               {!!displayTime && <Text style={styles.time}>{displayTime}</Text>}
             </View>
-            {!!displayBody && <Text style={styles.body}>{displayBody}</Text>}
+            {!!localizedBody && <Text style={styles.body}>{localizedBody}</Text>}
           </>
         )}
       </ScrollView>

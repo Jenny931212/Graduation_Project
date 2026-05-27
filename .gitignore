@@ -31,7 +31,11 @@ yarn-error.*
 *.pem
 
 # local env files
+.env
+.venv/
 .env*.local
+backend/ocr_translation/.env
+backend/ocr_translation/.venv/
 
 # typescript
 *.tsbuildinfo

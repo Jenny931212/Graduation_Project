@@ -3,6 +3,8 @@ import { Alert, Pressable, ScrollView, Text, TextInput, View } from "react-nativ
 import { router } from "expo-router";
 import { useAuth } from "@/src/auth/useAuth";
 import { useActiveCareTarget } from "@/src/care-target/useActiveCareTarget";
+import { translations } from "@/src/i18n/translations";
+import { useLanguage } from "@/src/store/LanguageContext";
 import {
   arrayUnion,
   collection,
@@ -18,6 +20,8 @@ import { db,auth } from "@/firebase/firebaseConfig";
 export default function CareTargetJoinScreen() {
   const { user } = useAuth();
   const { setActivePatientId } = useActiveCareTarget();
+  const { language } = useLanguage();
+  const t = translations[language];
   const [code, setCode] = useState("");
 
   const normalizedCode = useMemo(() => code.trim().toUpperCase(), [code]);
@@ -34,7 +38,7 @@ export default function CareTargetJoinScreen() {
       const snap = await getDocs(q);
 
       if (snap.empty) {
-        Alert.alert("無效的邀請碼", "請確認邀請碼是否正確。");
+        Alert.alert(t.invalidInviteCode, t.checkInviteCode);
         return;
       }
 
@@ -45,9 +49,9 @@ export default function CareTargetJoinScreen() {
       const currentList = Array.isArray(found?.[roleField]) ? found[roleField] : [];
 
       if (currentList.includes(user.uid)) {
-        Alert.alert("提示", "您已經加入過這位長輩了。", [
+        Alert.alert(t.prompt, t.alreadyJoined, [
           {
-            text: "前往使用",
+            text: t.goUse,
             onPress: async () => {
               await setActivePatientId(foundDoc.id);
               const home = user.role === "caregiver" ? "/caregiver" : "/family";
@@ -64,9 +68,9 @@ export default function CareTargetJoinScreen() {
 
       await setActivePatientId(foundDoc.id);
 
-      Alert.alert("成功加入", `已成功連結到：${found?.name ?? "此照顧對象"}`, [
+      Alert.alert(t.joinSuccess, found?.name ?? t.selectCareTarget, [
         {
-          text: "開始使用",
+          text: t.startUse,
           onPress: async () => {
             const home = user.role === "caregiver" ? "/caregiver" : "/family";
             router.replace(home as any);
@@ -78,28 +82,28 @@ export default function CareTargetJoinScreen() {
 
       if (e?.code === "permission-denied") {
         Alert.alert(
-          "加入失敗",
-          "目前權限規則不允許用邀請碼查詢照顧對象，請先調整 Firestore Rules。"
+          t.joinFailed,
+          t.invitePermissionDenied
         );
         return;
       }
 
-      Alert.alert("加入失敗", "請稍後再試一次");
+      Alert.alert(t.joinFailed, t.tryLater);
     }
   };
 
   return (
     <ScrollView contentContainerStyle={{ padding: 24, paddingTop: 90, gap: 24 }}>
       <View style={{ gap: 8 }}>
-        <Text style={{ fontSize: 28, fontWeight: "900" }}>加入照顧對象</Text>
-        <Text style={{ fontSize: 16, color: "#666" }}>請向其他護理人員或家屬索取邀請碼</Text>
+        <Text style={{ fontSize: 28, fontWeight: "900" }}>{t.joinCareTarget}</Text>
+        <Text style={{ fontSize: 16, color: "#666" }}>{t.askInviteCode}</Text>
       </View>
 
       <View style={{ gap: 12 }}>
         <TextInput
           value={code}
           onChangeText={setCode}
-          placeholder="請輸入 6-8 碼邀請碼"
+          placeholder={t.inviteCodePlaceholder}
           autoCapitalize="characters"
           style={{
             borderWidth: 1,
@@ -121,7 +125,7 @@ export default function CareTargetJoinScreen() {
         style={{ backgroundColor: canSubmit ? "#007AFF" : "#CCC", padding: 18, borderRadius: 12 }}
       >
         <Text style={{ color: "#FFF", textAlign: "center", fontWeight: "900", fontSize: 18 }}>
-          立即加入
+          {t.joinNow}
         </Text>
       </Pressable>
 
@@ -147,7 +151,7 @@ export default function CareTargetJoinScreen() {
         })}
       >
         <Text style={{ color: "#666", textAlign: "center", fontWeight: "700", fontSize: 16 }}>
-          返回登入頁面
+          {t.backToLoginPage}
         </Text>
       </Pressable>
     </ScrollView>

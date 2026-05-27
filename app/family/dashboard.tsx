@@ -2,6 +2,8 @@
 import { db } from "@/firebase/firebaseConfig";
 import { useActiveCareTarget } from "@/src/care-target/useActiveCareTarget";
 import HealthTrendChart from "@/src/health/HealthTrendChart";
+import { translations } from "@/src/i18n/translations";
+import { useLanguage } from "@/src/store/LanguageContext";
 import {
   ChartDataType,
   ChartTimeRange,
@@ -50,6 +52,8 @@ type VitalsState = {
 
 export default function FamilyDashboardScreen() {
   const { ready, activePatientId } = useActiveCareTarget();
+  const { language } = useLanguage();
+  const t = translations[language];
 
   const [activeTab, setActiveTab] = useState<"history" | "today">("history");
 
@@ -191,9 +195,9 @@ export default function FamilyDashboardScreen() {
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
 
-    let label = `${d.getMonth() + 1}月${d.getDate()}日`;
-    if (d.toDateString() === today.toDateString()) label = "今日";
-    else if (d.toDateString() === yesterday.toDateString()) label = "昨天";
+    let label = `${d.getMonth() + 1}/${d.getDate()}`;
+    if (d.toDateString() === today.toDateString()) label = t.today;
+    else if (d.toDateString() === yesterday.toDateString()) label = t.yesterday;
 
     return `${label} ${time}`;
   };
@@ -207,7 +211,7 @@ export default function FamilyDashboardScreen() {
       <View style={styles.topContainer}>
         <View style={styles.headerRow}>
           <Pressable onPress={() => router.back()} style={styles.backButton}>
-            <Text style={styles.backButtonText}>← 返回主頁</Text>
+            <Text style={styles.backButtonText}>{t.backHome}</Text>
           </Pressable>
         </View>
 
@@ -222,7 +226,7 @@ export default function FamilyDashboardScreen() {
                 activeTab === "history" ? styles.tabTextActive : styles.tabTextInactive,
               ]}
             >
-              歷史趨勢
+              {t.historyTrend}
             </Text>
           </Pressable>
           <Pressable
@@ -235,7 +239,7 @@ export default function FamilyDashboardScreen() {
                 activeTab === "today" ? styles.tabTextActive : styles.tabTextInactive,
               ]}
             >
-              本日紀錄
+              {t.todayRecords}
             </Text>
           </Pressable>
         </View>
@@ -316,7 +320,7 @@ export default function FamilyDashboardScreen() {
                   return (
                     <>
                       <View style={[styles.cardHeader, { backgroundColor: colors.top }]}>
-                        <Text style={styles.cardTitle}>體溫</Text>
+                        <Text style={styles.cardTitle}>{t.temperature}</Text>
                       </View>
                       <View style={[styles.cardBody, { backgroundColor: colors.bottom }]}>
                         <View style={styles.valueRow}>
@@ -325,7 +329,7 @@ export default function FamilyDashboardScreen() {
                         </View>
                         <View style={styles.timeBadge}>
                           <Text style={styles.timeBadgeText}>
-                            {vitals.temp ? formatTime(vitals.temp.ts) : "無紀錄"}
+                            {vitals.temp ? formatTime(vitals.temp.ts) : t.noRecord}
                           </Text>
                         </View>
                       </View>
@@ -341,7 +345,7 @@ export default function FamilyDashboardScreen() {
                   return (
                     <>
                       <View style={[styles.cardHeader, { backgroundColor: colors.top }]}>
-                        <Text style={styles.cardTitle}>心跳</Text>
+                        <Text style={styles.cardTitle}>{t.heartRate}</Text>
                       </View>
                       <View style={[styles.cardBody, { backgroundColor: colors.bottom }]}>
                         <View style={styles.valueRow}>
@@ -350,7 +354,7 @@ export default function FamilyDashboardScreen() {
                         </View>
                         <View style={styles.timeBadge}>
                           <Text style={styles.timeBadgeText}>
-                            {vitals.hr ? formatTime(vitals.hr.ts) : "無紀錄"}
+                            {vitals.hr ? formatTime(vitals.hr.ts) : t.noRecord}
                           </Text>
                         </View>
                       </View>
@@ -367,10 +371,10 @@ export default function FamilyDashboardScreen() {
                 return (
                   <>
                     <View style={[styles.fullCardHeader, { backgroundColor: colors.top }]}>
-                      <Text style={styles.cardTitle}>血壓</Text>
+                      <Text style={styles.cardTitle}>{t.bloodPressure}</Text>
                       <View style={styles.headerSubRow}>
-                        <Text style={styles.headerSubText}>收縮壓</Text>
-                        <Text style={styles.headerSubText}>舒張壓</Text>
+                        <Text style={styles.headerSubText}>{t.systolic}</Text>
+                        <Text style={styles.headerSubText}>{t.diastolic}</Text>
                       </View>
                     </View>
                     <View style={[styles.fullCardBody, { backgroundColor: colors.bottom }]}>
@@ -386,7 +390,7 @@ export default function FamilyDashboardScreen() {
                       </View>
                       <View style={[styles.timeBadge, { paddingHorizontal: 32 }]}>
                         <Text style={styles.timeBadgeText}>
-                          {vitals.bp ? formatTime(vitals.bp.ts) : "無紀錄"}
+                          {vitals.bp ? formatTime(vitals.bp.ts) : t.noRecord}
                         </Text>
                       </View>
                     </View>
@@ -412,10 +416,10 @@ export default function FamilyDashboardScreen() {
                 return (
                   <>
                     <View style={[styles.fullCardHeader, { backgroundColor: colors.top }]}>
-                      <Text style={styles.cardTitle}>血糖</Text>
+                      <Text style={styles.cardTitle}>{t.bloodSugar}</Text>
                       <View style={styles.headerSubRow}>
-                        <Text style={styles.headerSubText}>空腹</Text>
-                        <Text style={styles.headerSubText}>飯後</Text>
+                        <Text style={styles.headerSubText}>{t.fasting}</Text>
+                        <Text style={styles.headerSubText}>{t.afterMeal}</Text>
                       </View>
                     </View>
                     <View style={[styles.fullCardBody, { backgroundColor: colors.bottom }]}>
@@ -435,7 +439,7 @@ export default function FamilyDashboardScreen() {
                       </View>
                       <View style={[styles.timeBadge, { paddingHorizontal: 32 }]}>
                         <Text style={styles.timeBadgeText}>
-                          {latestTs > 0 ? formatTime(latestTs) : "無紀錄"}
+                          {latestTs > 0 ? formatTime(latestTs) : t.noRecord}
                         </Text>
                       </View>
                     </View>

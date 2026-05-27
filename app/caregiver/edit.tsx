@@ -6,6 +6,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { doc, collection, getDoc, getDocs, query, where, writeBatch, serverTimestamp } from "firebase/firestore";
 import { db } from "@/firebase/firebaseConfig";
 import { createMedicationReminders } from "@/src/reminders/createMedicationReminders";
+import { pickLocalizedString, translations, type Language } from "@/src/i18n/translations";
+import { useLanguage } from "@/src/store/LanguageContext";
 
 type EditItem = {
   itemId?: string;
@@ -16,20 +18,20 @@ type EditItem = {
   memo: string;
 };
 
-function safeParseItems(itemsJson?: string): EditItem[] {
+function safeParseItems(itemsJson: string | undefined, language: Language): EditItem[] {
   if (!itemsJson) return [{ itemId: undefined, name: "", dosage: "", usage_type: "", usage_time: "", memo: "" }];
   try {
     const data = JSON.parse(itemsJson);
     return data.map((it: any) => {
-      const usage = it.usage_zh ?? it.usage ?? it.time_of_day ?? it.time ?? "";
+      const usage = pickLocalizedString(it.raw ?? it, "usage", language, it.usage_zh ?? it.usage ?? it.time_of_day ?? it.time ?? "");
       const parts = usage.includes(",") ? usage.split(",") : [usage, ""];
       return {
         itemId: it.itemId ?? it.id ?? undefined,
-        name: it.drug_name_zh ?? it.drug_name ?? it.name ?? "",
+        name: pickLocalizedString(it.raw ?? it, "drug_name", language, it.drug_name_zh ?? it.drug_name ?? it.name ?? ""),
         dosage: it.dose ?? it.dosage ?? "",
         usage_type: parts[0] || "",
         usage_time: parts.slice(1).join(",") || "",
-        memo: it.note_zh ?? it.memo ?? it.note ?? "",
+        memo: pickLocalizedString(it.raw ?? it, "note", language, it.note_zh ?? it.memo ?? it.note ?? ""),
       };
     });
   } catch (e) {
@@ -40,7 +42,9 @@ function safeParseItems(itemsJson?: string): EditItem[] {
 export default function CaregiverEditScreen() {
   const { id, itemsJson } = useLocalSearchParams<{ id?: string; itemsJson?: string }>();
   const { ready } = useAuthContext();
-  const initialItems = useMemo(() => safeParseItems(itemsJson), [itemsJson]);
+  const { language } = useLanguage();
+  const t = translations[language];
+  const initialItems = useMemo(() => safeParseItems(itemsJson, language), [itemsJson, language]);
   const [items, setItems] = useState<EditItem[]>(initialItems);
 
   useEffect(() => {
@@ -51,16 +55,16 @@ export default function CaregiverEditScreen() {
         const itemsSnap = await getDocs(query(collection(db, "prescriptions", id, "items")));
         const fetchedItems: EditItem[] = itemsSnap.docs.map((docSnap) => {
           const it = docSnap.data() as any;
-          const usage = it.usage_zh ?? it.usage ?? it.time_of_day ?? it.time ?? "";
+          const usage = pickLocalizedString(it, "usage", language, it.usage_zh ?? it.usage ?? it.time_of_day ?? it.time ?? "");
           const parts = usage.includes(",") ? usage.split(",") : [usage, ""];
 
           return {
             itemId: docSnap.id,
-            name: it.drug_name_zh ?? it.drug_name ?? it.name ?? "",
+            name: pickLocalizedString(it, "drug_name", language, it.drug_name_zh ?? it.drug_name ?? it.name ?? ""),
             dosage: it.dose ?? it.dosage ?? "",
             usage_type: parts[0] || "",
             usage_time: parts.slice(1).join(",") || "",
-            memo: it.note_zh ?? it.memo ?? it.note ?? "",
+            memo: pickLocalizedString(it, "note", language, it.note_zh ?? it.memo ?? it.note ?? ""),
           };
         });
 
@@ -71,7 +75,7 @@ export default function CaregiverEditScreen() {
         console.log("caregiver edit load items error:", e);
       }
     })();
-  }, [id]);
+  }, [id, language]);
 
   const updateItem = (index: number, field: keyof EditItem, value: string) => {
     const newItems = [...items];
@@ -126,37 +130,37 @@ export default function CaregiverEditScreen() {
           time_of_day: `${it.usage_type}${it.usage_time ? "," + it.usage_time : ""}`,
         })),
       });
-      Alert.alert("更新成功", "雲端資料已同步", [{ text: "確定", onPress: () => router.back() }]);
+      Alert.alert(t.saveSuccessTitle, t.saveSuccessMessage, [{ text: t.confirm, onPress: () => router.back() }]);
     } catch (e) {
-      Alert.alert("錯誤", "無法連線至雲端資料庫");
+      Alert.alert(t.resultErrorTitle, t.inputFailedCloud);
     }
   };
 
-  if (!ready) return <View style={styles.center}><Text>載入中…</Text></View>;
+  if (!ready) return <View style={styles.center}><Text>{t.loading}</Text></View>;
 
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" />
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="chevron-back" size={28} color="#333" /><Text style={styles.backText}>返回</Text>
+          <Ionicons name="chevron-back" size={28} color="#333" /><Text style={styles.backText}>{t.back}</Text>
         </Pressable>
       </View>
 
       <View style={styles.titleRow}>
-        <Text style={styles.pageTitle}>修正藥單資訊</Text>
-        <Pressable onPress={handleSave} style={styles.saveBtn}><Text style={styles.saveBtnText}>儲存</Text></Pressable>
+        <Text style={styles.pageTitle}>{t.editPrescriptionInfo}</Text>
+        <Pressable onPress={handleSave} style={styles.saveBtn}><Text style={styles.saveBtnText}>{t.save}</Text></Pressable>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {items.map((it, idx) => (
           <View key={it.itemId ?? idx} style={styles.editCard}>
-            <Text style={styles.itemTag}>藥品項目 {idx + 1}</Text>
-            <View style={styles.inputBox}><Text style={styles.label}>藥名</Text><TextInput style={styles.input} value={it.name} onChangeText={(t) => updateItem(idx, "name", t)} /></View>
-            <View style={styles.inputBox}><Text style={styles.label}>劑量</Text><TextInput style={styles.input} value={it.dosage} onChangeText={(t) => updateItem(idx, "dosage", t)} /></View>
-            <View style={styles.inputBox}><Text style={styles.label}>用法 (如: 口服)</Text><TextInput style={styles.input} value={it.usage_type} onChangeText={(t) => updateItem(idx, "usage_type", t)} /></View>
-            <View style={styles.inputBox}><Text style={styles.label}>服用時間 (如: 每日兩次)</Text><TextInput style={styles.input} value={it.usage_time} onChangeText={(t) => updateItem(idx, "usage_time", t)} /></View>
-            <View style={styles.inputBox}><Text style={styles.label}>備註</Text><TextInput style={[styles.input, styles.memoInput]} value={it.memo} multiline onChangeText={(t) => updateItem(idx, "memo", t)} /></View>
+            <Text style={styles.itemTag}>{t.medicineItem} {idx + 1}</Text>
+            <View style={styles.inputBox}><Text style={styles.label}>{t.medicineName}</Text><TextInput style={styles.input} value={it.name} onChangeText={(text) => updateItem(idx, "name", text)} /></View>
+            <View style={styles.inputBox}><Text style={styles.label}>{t.dosage}</Text><TextInput style={styles.input} value={it.dosage} onChangeText={(text) => updateItem(idx, "dosage", text)} /></View>
+            <View style={styles.inputBox}><Text style={styles.label}>{t.usageExample}</Text><TextInput style={styles.input} value={it.usage_type} onChangeText={(text) => updateItem(idx, "usage_type", text)} /></View>
+            <View style={styles.inputBox}><Text style={styles.label}>{t.usageTimeExample}</Text><TextInput style={styles.input} value={it.usage_time} onChangeText={(text) => updateItem(idx, "usage_time", text)} /></View>
+            <View style={styles.inputBox}><Text style={styles.label}>{t.note}</Text><TextInput style={[styles.input, styles.memoInput]} value={it.memo} multiline onChangeText={(text) => updateItem(idx, "memo", text)} /></View>
           </View>
         ))}
       </ScrollView>

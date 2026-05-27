@@ -5,6 +5,8 @@ import { collection, onSnapshot, orderBy, query, where, doc, getDocs, writeBatch
 import { db } from "@/firebase/firebaseConfig";
 import { useActiveCareTarget } from "@/src/care-target/useActiveCareTarget";
 import { useAuthContext } from "@/src/auth/AuthProvider";
+import { translations } from "@/src/i18n/translations";
+import { useLanguage } from "@/src/store/LanguageContext";
 import { Ionicons } from "@expo/vector-icons";
 
 async function deletePrescriptionCascade(prescriptionId: string) {
@@ -36,6 +38,8 @@ async function deletePrescriptionCascade(prescriptionId: string) {
 export default function FamilyListScreen() {
   const { activePatientId } = useActiveCareTarget();
   const { ready } = useAuthContext();
+  const { language } = useLanguage();
+  const t = translations[language];
   const [list, setList] = useState<any[]>([]);
 
   useEffect(() => {
@@ -52,28 +56,28 @@ export default function FamilyListScreen() {
         const data = d.data() as any;
         return {
           prescriptionId: d.id,
-          title: data.title || "未命名藥單",
+          title: data.title || t.cameraDefaultDraftTitle,
           createdAt: data.createdAt,
         };
       }));
     });
     return unsub;
-  }, [activePatientId]);
+  }, [activePatientId, t.cameraDefaultDraftTitle]);
 
   const handleDelete = (id: string) => {
-    Alert.alert("刪除藥單", "確定要刪除這份藥單紀錄嗎？", [
-      { text: "取消", style: "cancel" },
-      { text: "確定刪除", style: "destructive", onPress: async () => {
+    Alert.alert(t.deletePrescriptionTitle, t.deletePrescriptionMessage, [
+      { text: t.cancel, style: "cancel" },
+      { text: t.deleteConfirm, style: "destructive", onPress: async () => {
         try {
           await deletePrescriptionCascade(id);
         } catch (e) {
-          Alert.alert("錯誤", "刪除失敗，請檢查權限");
+          Alert.alert(t.resultErrorTitle, t.deleteFailed);
         }
       }}
     ]);
   };
 
-  if (!ready) return <View style={styles.center}><Text>讀取中…</Text></View>;
+  if (!ready) return <View style={styles.center}><Text>{t.loading}</Text></View>;
 
   return (
     <View style={styles.container}>
@@ -81,7 +85,7 @@ export default function FamilyListScreen() {
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="chevron-back" size={28} color="#333" />
-          <Text style={styles.backText}>返回</Text>
+          <Text style={styles.backText}>{t.back}</Text>
         </Pressable>
       </View>
       
@@ -89,30 +93,30 @@ export default function FamilyListScreen() {
         {list.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Ionicons name="document-text-outline" size={60} color="#CCC" />
-            <Text style={styles.emptyText}>目前尚無藥單紀錄</Text>
+            <Text style={styles.emptyText}>{t.noPrescriptionRecords}</Text>
           </View>
         ) : (
           list.map((p) => (
             <View key={p.prescriptionId} style={styles.card}>
               <View style={{ gap: 4 }}>
-                <Text style={styles.cardTitle}>{p.title || "藥單名稱"}</Text>
+                <Text style={styles.cardTitle}>{p.title || t.prescriptionName}</Text>
                 <Text style={styles.cardDate}>
-                  日期：{
+                  {t.date}：{
                     typeof p.createdAt === 'string' 
                       ? p.createdAt 
                       : (p.createdAt?.seconds 
                           ? new Date(p.createdAt.seconds * 1000).toLocaleDateString() 
-                          : "未知")
+                          : t.unknown)
                   }
                 </Text>
               </View>
               {/* 💡 底部按鈕排版 */}
               <View style={styles.cardFooter}>
                 <Pressable onPress={() => router.push({ pathname: "/family/detail", params: { id: p.prescriptionId } })}>
-                  <Text style={styles.detailText}>查看詳情</Text>
+                  <Text style={styles.detailText}>{t.viewDetails}</Text>
                 </Pressable>
                 <Pressable onPress={() => handleDelete(p.prescriptionId)}>
-                  <Text style={styles.deleteText}>刪除</Text>
+                  <Text style={styles.deleteText}>{t.delete}</Text>
                 </Pressable>
               </View>
             </View>

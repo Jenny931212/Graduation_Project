@@ -2,6 +2,7 @@
 import { AuthProvider } from "@/src/auth/AuthProvider";
 import { useAuth } from "@/src/auth/useAuth";
 import { registerForPushToken } from "@/src/notifications/registerForPushToken";
+import { LanguageProvider } from "@/src/store/LanguageContext";
 import { StoreProvider } from "@/src/store/StoreProvider";
 import { Stack, useRouter, useSegments } from "expo-router";
 import { useEffect, useState } from "react";
@@ -62,9 +63,11 @@ function RootLayoutNav() {
 export default function RootLayout() {
   return (
     <AuthProvider>
-      <StoreProvider>
-        <RootLayoutNav />
-      </StoreProvider>
+      <LanguageProvider>
+        <StoreProvider>
+          <RootLayoutNav />
+        </StoreProvider>
+      </LanguageProvider>
     </AuthProvider>
   );
 }

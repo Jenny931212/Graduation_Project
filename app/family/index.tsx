@@ -7,6 +7,8 @@ import React, { useEffect, useState } from "react";
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { useActiveCareTarget } from "@/src/care-target/useActiveCareTarget";
+import { translations } from "@/src/i18n/translations";
+import { useLanguage } from "@/src/store/LanguageContext";
 
 // 定義生理數據狀態型別
 type VitalStatus = 'normal' | 'abnormal' | 'outdated' | 'nodata';
@@ -16,6 +18,8 @@ type SugarVital = { val: number; type: string; ts: number } | null;
 
 export default function FamilyHomeScreen() {
   const { ready, activePatient, activePatientId, linkedCareTargets, setActivePatientId } = useActiveCareTarget();
+  const { language } = useLanguage();
+  const t = translations[language];
 
   // 存放最新的生理數據
   const [vitals, setVitals] = useState<any>({
@@ -63,7 +67,7 @@ export default function FamilyHomeScreen() {
         if (!temp && d.temperature) temp = { val: d.temperature, ts };
         if (!hr && d.heartRate) hr = { val: d.heartRate, ts };
         if (!bp && d.bloodPressureSys && d.bloodPressureDia) bp = { sys: d.bloodPressureSys, dia: d.bloodPressureDia, ts };
-        if (!sugar && d.bloodSugar) sugar = { val: d.bloodSugar, type: d.bloodSugarType || '空腹', ts };
+        if (!sugar && d.bloodSugar) sugar = { val: d.bloodSugar, type: d.bloodSugarType || t.fasting, ts };
       });
 
       setVitals({ temp, hr, bp, sugar, hasAnyData });
@@ -75,7 +79,7 @@ export default function FamilyHomeScreen() {
   const copyInviteCode = async () => {
     if (activePatient?.inviteCode) {
       await Clipboard.setStringAsync(activePatient.inviteCode);
-      Alert.alert("已複製", "邀請碼已複製到剪貼簿");
+      Alert.alert(t.copiedTitle, t.copiedInviteCode);
     }
   };
 
@@ -105,8 +109,8 @@ export default function FamilyHomeScreen() {
       // 收縮壓 90~140，舒張壓 60~90 算正常 (長輩標準)
       if (data.sys < 90 || data.sys > 120 || data.dia < 60 || data.dia > 90) return 'abnormal';
     } else if (type === 'sugar') {
-      if (data.type === '空腹' && (data.val < 70 || data.val > 100)) return 'abnormal';
-      if (data.type === '飯後' && (data.val < 70 || data.val > 140)) return 'abnormal';
+      if ((data.type === '空腹' || data.type === t.fasting) && (data.val < 70 || data.val > 100)) return 'abnormal';
+      if ((data.type === '飯後' || data.type === t.afterMeal) && (data.val < 70 || data.val > 140)) return 'abnormal';
     }
     return 'normal';
   };
@@ -129,8 +133,8 @@ export default function FamilyHomeScreen() {
     yesterday.setDate(yesterday.getDate() - 1);
 
     let label = `${d.getMonth() + 1}月${d.getDate()}日`;
-    if (d.toDateString() === today.toDateString()) label = '今日';
-    else if (d.toDateString() === yesterday.toDateString()) label = '昨天';
+    if (d.toDateString() === today.toDateString()) label = t.today;
+    else if (d.toDateString() === yesterday.toDateString()) label = t.yesterday;
 
     return { time, label };
   };
@@ -207,8 +211,8 @@ export default function FamilyHomeScreen() {
 
         {/* 使用者資訊區塊 */}
         <View style={styles.userInfo}>
-          <Text style={styles.userName}>{activePatient?.name ?? "尚未選擇"}</Text>
-          <View style={styles.inviteBadge}><Text style={styles.inviteText}>邀請碼:{activePatient?.inviteCode ?? "無"}</Text></View>
+          <Text style={styles.userName}>{activePatient?.name ?? t.noSelectedPatient}</Text>
+          <View style={styles.inviteBadge}><Text style={styles.inviteText}>{t.inviteCode}:{activePatient?.inviteCode ?? t.none}</Text></View>
           <Pressable onPress={copyInviteCode} style={styles.copyIconWrap}>
             <View style={styles.copyIconBack} /><View style={styles.copyIconFront} />
           </Pressable>
@@ -216,13 +220,13 @@ export default function FamilyHomeScreen() {
 
         {/* 今日用藥進度卡片 */}
         <View style={styles.medCard}>
-          <Text style={styles.medTitle}>今日用藥進度</Text>
+          <Text style={styles.medTitle}>{t.todayMedicationProgress}</Text>
           {stats.total > 0 ? (
-            <><Text style={styles.medProgress}>已準備就緒</Text><Text style={styles.medDetail}>等待看護回報今日服藥狀況...</Text></>
+            <><Text style={styles.medProgress}>{t.ready}</Text><Text style={styles.medDetail}>{t.waitingMedicationReport}</Text></>
           ) : (
             <View style={{ alignItems: "center", marginTop: 10 }}>
-              <Text style={{ fontSize: 16, color: "#999", fontWeight: "bold" }}>目前沒有任何藥單</Text>
-              <Text style={{ fontSize: 14, color: "#CCC", marginTop: 4 }}>請看護協助新增藥單後啟用</Text>
+              <Text style={{ fontSize: 16, color: "#999", fontWeight: "bold" }}>{t.noPrescriptions}</Text>
+              <Text style={{ fontSize: 14, color: "#CCC", marginTop: 4 }}>{t.askCaregiverAddPrescription}</Text>
             </View>
           )}
         </View>
@@ -231,32 +235,32 @@ export default function FamilyHomeScreen() {
         <View style={styles.vitalsOuterCard}>
           {!vitals.hasAnyData ? (
             <View style={{ paddingVertical: 30, alignItems: "center" }}>
-              <Text style={{ fontSize: 18, color: "#999", fontWeight: "bold" }}>尚無生理數據紀錄</Text>
-              <Text style={{ fontSize: 14, color: "#CCC", marginTop: 8 }}>長輩或看護開始記錄後將顯示於此</Text>
+              <Text style={{ fontSize: 18, color: "#999", fontWeight: "bold" }}>{t.noVitals}</Text>
+              <Text style={{ fontSize: 14, color: "#CCC", marginTop: 8 }}>{t.vitalsWillShow}</Text>
             </View>
           ) : (
             <View style={styles.vitalsGrid}>
-              {renderVitalBlock('體溫', 'temp', vitals.temp)}
-              {renderVitalBlock('心跳', 'hr', vitals.hr)}
-              {renderVitalBlock('血壓', 'bp', vitals.bp)}
-              {renderVitalBlock('血糖', 'sugar', vitals.sugar)}
+              {renderVitalBlock(t.temperature, 'temp', vitals.temp)}
+              {renderVitalBlock(t.heartRate, 'hr', vitals.hr)}
+              {renderVitalBlock(t.bloodPressure, 'bp', vitals.bp)}
+              {renderVitalBlock(t.bloodSugar, 'sugar', vitals.sugar)}
             </View>
           )}
           <Pressable onPress={() => router.push("/family/dashboard" as any)} style={styles.chartBtn}>
-            <Text style={styles.chartBtnText}>查看圖表 📊</Text>
+            <Text style={styles.chartBtnText}>{t.viewChart}</Text>
           </Pressable>
         </View>
 
         {/* 底部三大功能按鈕 */}
         <View style={styles.actionsRow}>
           <Pressable onPress={() => router.push("/family/list")} style={[styles.actionBtn, { backgroundColor: '#F4E770' }]}>
-            <Text style={styles.actionEmoji}>📋</Text><Text style={styles.actionText}>藥單紀錄</Text>
+            <Text style={styles.actionEmoji}>📋</Text><Text style={styles.actionText}>{t.prescriptionRecords}</Text>
           </Pressable>
           <Pressable onPress={() => router.push("/family/condition" as any)} style={[styles.actionBtn, { backgroundColor: '#85C6F9' }]}>
-            <Text style={styles.actionEmoji}>📹</Text><Text style={styles.actionText}>狀況查看</Text>
+            <Text style={styles.actionEmoji}>📹</Text><Text style={styles.actionText}>{t.conditionView}</Text>
           </Pressable>
           <Pressable onPress={() => router.push("/family/voice")} style={[styles.actionBtn, { backgroundColor: '#85E785' }]}>
-            <Text style={styles.actionEmoji}>🎙️</Text><Text style={styles.actionText}>錄製語音</Text>
+            <Text style={styles.actionEmoji}>🎙️</Text><Text style={styles.actionText}>{t.recordVoice}</Text>
           </Pressable>
         </View>
       </ScrollView>

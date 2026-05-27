@@ -27,9 +27,16 @@ import {
 import { db } from "@/firebase/firebaseConfig";
 import { useAuth } from "@/src/auth/useAuth";
 import { useActiveCareTarget } from "@/src/care-target/useActiveCareTarget";
+import {
+  ensureFirestoreTranslations,
+  pickDynamicLocalizedString,
+} from "@/src/i18n/dynamicTranslation";
+import { translations } from "@/src/i18n/translations";
+import { useLanguage } from "@/src/store/LanguageContext";
 
 type CalendarEventRecord = {
   id: string;
+  [key: string]: any;
   patientId?: string;
   createdBy?: string;
   createdAt?: Timestamp | null;
@@ -375,6 +382,12 @@ function WheelColumn<T extends string | number>({
 export default function FamilyCalendarScreen() {
   const { user } = useAuth();
   const { activePatientId } = useActiveCareTarget();
+  const { language } = useLanguage();
+  const t = translations[language];
+  const weekLabels =
+    language === "zh"
+      ? ["一", "二", "三", "四", "五", "六", "日"]
+      : WEEK_LABELS;
 
   const [currentMonth, setCurrentMonth] = useState(getCurrentMonthStart);
   const [selectedDate, setSelectedDate] = useState(getTodayDate);
@@ -444,6 +457,24 @@ export default function FamilyCalendarScreen() {
 
     return () => unsubscribe();
   }, [activePatientId]);
+
+  useEffect(() => {
+    if (language === "zh") return;
+
+    events.forEach((event) => {
+      void ensureFirestoreTranslations(
+        doc(db, CALENDAR_EVENTS_COLLECTION, event.id),
+        event,
+        language,
+        [
+          { baseName: "name", sourceKeys: ["name", "personName", "patientName"] },
+          { baseName: "title", sourceKeys: ["title", "eventTitle", "event", "description"] },
+          { baseName: "location", sourceKeys: ["location", "place"] },
+          { baseName: "description", sourceKeys: ["description"] },
+        ]
+      );
+    });
+  }, [events, language]);
 
   const resetForm = () => {
     setForm({
@@ -516,9 +547,12 @@ export default function FamilyCalendarScreen() {
     const payload = {
       name: form.personName.trim(),
       personName: form.personName.trim(),
+      name_zh: form.personName.trim(),
       title: form.title.trim(),
       eventTitle: form.title.trim(),
+      title_zh: form.title.trim(),
       location: form.location.trim(),
+      location_zh: form.location.trim(),
       color: form.color,
       startAt: Timestamp.fromDate(startDate),
       eventDate,
@@ -687,7 +721,7 @@ export default function FamilyCalendarScreen() {
           </View>
 
           <View style={styles.weekRow}>
-            {WEEK_LABELS.map((day) => (
+            {weekLabels.map((day) => (
               <Text key={day} style={styles.weekText}>
                 {day}
               </Text>
@@ -705,6 +739,34 @@ export default function FamilyCalendarScreen() {
                 const secondaryTextStyle = useLightText ? styles.eventSecondaryTextLight : styles.eventSecondaryTextDark;
                 const completedTextStyle = event.resolvedIsCompleted && styles.eventCompletedText;
                 const actionIconColor = useLightText ? "#FFFFFF" : "#1F2430";
+                const eventPersonName = pickDynamicLocalizedString(
+                  event,
+                  "name",
+                  language,
+                  ["name", "personName", "patientName"],
+                  event.resolvedPersonName
+                );
+                const eventTitle = pickDynamicLocalizedString(
+                  event,
+                  "title",
+                  language,
+                  ["title", "eventTitle", "event", "description"],
+                  event.resolvedTitle
+                );
+                const eventLocation = pickDynamicLocalizedString(
+                  event,
+                  "location",
+                  language,
+                  ["location", "place"],
+                  event.resolvedLocation
+                );
+                const eventDescription = pickDynamicLocalizedString(
+                  event,
+                  "description",
+                  language,
+                  ["description"],
+                  event.resolvedDescription
+                );
 
                 return (
                   <View key={event.id} style={[styles.eventCard, { backgroundColor: event.resolvedColor }]}>
@@ -720,36 +782,36 @@ export default function FamilyCalendarScreen() {
 
                       <View style={styles.eventInfo}>
                         <Text style={[styles.eventPersonText, primaryTextStyle, completedTextStyle]} numberOfLines={2}>
-                          {event.resolvedPersonName || event.resolvedTitle || "Untitled"}
+                          {eventPersonName || eventTitle || t.unnamedRecord}
                         </Text>
 
-                        {event.resolvedTitle && event.resolvedTitle !== event.resolvedPersonName && (
+                        {eventTitle && eventTitle !== eventPersonName && (
                           <Text style={[styles.eventTitleText, primaryTextStyle, completedTextStyle]} numberOfLines={2}>
-                            {event.resolvedTitle}
+                            {eventTitle}
                           </Text>
                         )}
 
                         <View style={styles.eventMetaWrap}>
-                          {event.resolvedTitle && (
+                          {eventTitle && (
                             <View style={styles.eventMetaPill}>
                               <Text style={[styles.eventMetaText, secondaryTextStyle, completedTextStyle]} numberOfLines={1}>
-                                類型：{event.resolvedTitle}
+                                {t.calendarType}: {eventTitle}
                               </Text>
                             </View>
                           )}
 
-                          {event.resolvedLocation && (
+                          {eventLocation && (
                             <View style={styles.eventMetaPill}>
                               <Text style={[styles.eventMetaText, secondaryTextStyle, completedTextStyle]} numberOfLines={1}>
-                                地點：{event.resolvedLocation}
+                                {t.calendarLocation}: {eventLocation}
                               </Text>
                             </View>
                           )}
                         </View>
 
-                        {event.resolvedDescription && (
+                        {eventDescription && (
                           <Text style={[styles.eventDescriptionText, secondaryTextStyle, completedTextStyle]}>
-                            {event.resolvedDescription}
+                            {eventDescription}
                           </Text>
                         )}
                       </View>
@@ -769,7 +831,7 @@ export default function FamilyCalendarScreen() {
                             event.resolvedIsCompleted ? styles.eventStatusTextCompleted : styles.eventStatusTextPending,
                           ]}
                         >
-                          {event.resolvedIsCompleted ? "已完成" : "未完成"}
+                          {event.resolvedIsCompleted ? t.completed : t.pending}
                         </Text>
                       </Pressable>
                       <Pressable hitSlop={8} style={styles.eventActionButton} onPress={() => openEditForm(event)}>
@@ -844,7 +906,7 @@ export default function FamilyCalendarScreen() {
               </View>
 
               <View style={styles.fieldRow}>
-                <Text style={styles.fieldLabel}>姓名:</Text>
+                <Text style={styles.fieldLabel}>{t.name}:</Text>
                 <TextInput
                   style={styles.fieldInput}
                   value={form.personName}
@@ -855,7 +917,7 @@ export default function FamilyCalendarScreen() {
               </View>
 
               <View style={styles.fieldRow}>
-                <Text style={styles.fieldLabel}>時間:</Text>
+                <Text style={styles.fieldLabel}>{t.time}:</Text>
                 <View style={styles.timeField}>
                   <WheelColumn
                     values={HOURS}
@@ -879,7 +941,7 @@ export default function FamilyCalendarScreen() {
               </View>
 
               <View style={styles.fieldRow}>
-                <Text style={styles.fieldLabel}>事件:</Text>
+                <Text style={styles.fieldLabel}>{t.event}:</Text>
                 <TextInput
                   style={styles.fieldInput}
                   value={form.title}
@@ -890,7 +952,7 @@ export default function FamilyCalendarScreen() {
               </View>
 
               <View style={styles.fieldRow}>
-                <Text style={styles.fieldLabel}>地點:</Text>
+                <Text style={styles.fieldLabel}>{t.calendarLocation}:</Text>
                 <TextInput
                   style={styles.fieldInput}
                   value={form.location}

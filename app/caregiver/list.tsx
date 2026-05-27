@@ -6,6 +6,8 @@ import { collection, onSnapshot, orderBy, query, where, doc, getDocs, writeBatch
 import { db } from "@/firebase/firebaseConfig";
 import { useActiveCareTarget } from "@/src/care-target/useActiveCareTarget";
 import { useAuth } from "@/src/auth/useAuth";
+import { translations } from "@/src/i18n/translations";
+import { useLanguage } from "@/src/store/LanguageContext";
 import { Ionicons } from "@expo/vector-icons";
 
 async function deletePrescriptionCascade(prescriptionId: string) {
@@ -37,6 +39,8 @@ async function deletePrescriptionCascade(prescriptionId: string) {
 export default function CaregiverListScreen() {
   const { activePatientId } = useActiveCareTarget();
   const { user } = useAuth();
+  const { language } = useLanguage();
+  const t = translations[language];
   const [list, setList] = useState<any[]>([]);
   const [ready, setReady] = useState(false);
 
@@ -57,7 +61,7 @@ export default function CaregiverListScreen() {
         const data = d.data() as any;
         return {
           prescriptionId: d.id,
-          title: data.title ?? "未命名藥單",
+          title: data.title ?? t.cameraDefaultDraftTitle,
           createdAt: data.createdAt,
           sourceImageUrl: data.sourceImageUrl ?? "",
         };
@@ -67,26 +71,26 @@ export default function CaregiverListScreen() {
     });
 
     return unsub;
-  }, [activePatientId, user?.uid]);
+  }, [activePatientId, user?.uid, t.cameraDefaultDraftTitle]);
 
   const confirmDelete = (id: string) => {
-    Alert.alert("確認刪除", "這筆藥單紀錄將會永久移除。", [
-      { text: "取消", style: "cancel" },
+    Alert.alert(t.deletePrescriptionTitle, t.deletePrescriptionMessage, [
+      { text: t.cancel, style: "cancel" },
       {
-        text: "確定刪除",
+        text: t.deleteConfirm,
         style: "destructive",
         onPress: async () => {
           try {
             await deletePrescriptionCascade(id);
           } catch (e) {
-            Alert.alert("錯誤", "刪除失敗");
+            Alert.alert(t.resultErrorTitle, t.deleteFailedShort);
           }
         },
       },
     ]);
   };
 
-  if (!ready) return <View style={styles.center}><Text>讀取中…</Text></View>;
+  if (!ready) return <View style={styles.center}><Text>{t.loading}</Text></View>;
 
   return (
     <View style={styles.container}>
@@ -94,40 +98,40 @@ export default function CaregiverListScreen() {
       <View style={styles.header}>
         <Pressable onPress={() => router.replace("/caregiver")} style={styles.backButton}>
           <Ionicons name="chevron-back" size={28} color="#333" />
-          <Text style={styles.backText}>返回</Text>
+          <Text style={styles.backText}>{t.back}</Text>
         </Pressable>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        <Text style={styles.pageTitle}>藥單紀錄簿</Text>
+        <Text style={styles.pageTitle}>{t.prescriptionBook}</Text>
 
         {list.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Ionicons name="document-text-outline" size={60} color="#CCC" />
-            <Text style={styles.emptyText}>目前尚無藥單紀錄</Text>
-            <Text style={styles.emptySubText}>請至首頁點擊「掃描藥單」</Text>
+            <Text style={styles.emptyText}>{t.noPrescriptionRecords}</Text>
+            <Text style={styles.emptySubText}>{t.goHomeScanPrescription}</Text>
           </View>
         ) : (
           list.map((p) => (
             <View key={p.prescriptionId} style={styles.card}>
               <View style={{ gap: 4 }}>
-                <Text style={styles.cardTitle}>{p.title || "未命名藥單"}</Text>
+                <Text style={styles.cardTitle}>{p.title || t.cameraDefaultDraftTitle}</Text>
                 <Text style={styles.cardDate}>
-                  日期：{
+                  {t.date}：{
                     typeof p.createdAt === "string"
                       ? p.createdAt
                       : p.createdAt?.seconds
                       ? new Date(p.createdAt.seconds * 1000).toLocaleDateString()
-                      : "未知"
+                      : t.unknown
                   }
                 </Text>
               </View>
               <View style={styles.cardFooter}>
                 <Pressable onPress={() => router.push({ pathname: "/caregiver/detail", params: { id: p.prescriptionId } })}>
-                  <Text style={styles.detailText}>查看詳情</Text>
+                  <Text style={styles.detailText}>{t.viewDetails}</Text>
                 </Pressable>
                 <Pressable onPress={() => confirmDelete(p.prescriptionId)}>
-                  <Text style={styles.deleteText}>刪除</Text>
+                  <Text style={styles.deleteText}>{t.delete}</Text>
                 </Pressable>
               </View>
             </View>

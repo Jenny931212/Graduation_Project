@@ -11,9 +11,13 @@ import {
 import { router, Stack } from "expo-router";
 import { useAuth } from "@/src/auth/useAuth";
 import type { Role } from "@/src/auth/AuthProvider";
+import { translations } from "@/src/i18n/translations";
+import { useLanguage } from "@/src/store/LanguageContext";
 
 export default function RegisterScreen() {
   const { register } = useAuth();
+  const { language } = useLanguage();
+  const t = translations[language];
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -24,12 +28,12 @@ export default function RegisterScreen() {
 
   async function onRegister() {
     if (!email || password.length < 6) {
-      Alert.alert("提示", "Email 為必填，且密碼至少需 6 碼");
+      Alert.alert(t.prompt, t.registerValidation);
       return;
     }
 
     if (role === "family" && (!emergencyPhone1.trim() || !emergencyPhone2.trim())) {
-      Alert.alert("提示", "家屬帳號請填寫 2 組緊急聯絡電話");
+      Alert.alert(t.prompt, t.familyPhoneValidation);
       return;
     }
 
@@ -43,7 +47,7 @@ export default function RegisterScreen() {
 
       router.replace("/");
     } catch (e: any) {
-      Alert.alert("註冊失敗", e?.message ?? "註冊過程發生錯誤");
+      Alert.alert(t.registerFailed, e?.message ?? t.registerFailedFallback);
     } finally {
       setLoading(false);
     }
@@ -62,10 +66,10 @@ export default function RegisterScreen() {
 
       <View style={{ marginBottom: 32 }}>
         <Text style={{ fontSize: 36, fontWeight: "900", color: "#333" }}>
-          建立帳號
+          {t.createAccount}
         </Text>
         <Text style={{ fontSize: 16, color: "#666", marginTop: 8 }}>
-          選擇您的身份，開始管理照護計畫
+          {t.registerSubtitle}
         </Text>
       </View>
 
@@ -79,7 +83,7 @@ export default function RegisterScreen() {
               marginLeft: 4,
             }}
           >
-            您的身份
+            {t.role}
           </Text>
 
           <View style={{ flexDirection: "row", gap: 12 }}>
@@ -101,7 +105,7 @@ export default function RegisterScreen() {
                   color: role === "caregiver" ? "#007AFF" : "#999",
                 }}
               >
-                看護
+                {t.caregiver}
               </Text>
             </Pressable>
 
@@ -123,7 +127,7 @@ export default function RegisterScreen() {
                   color: role === "family" ? "#007AFF" : "#999",
                 }}
               >
-                家屬
+                {t.family}
               </Text>
             </Pressable>
           </View>
@@ -165,10 +169,10 @@ export default function RegisterScreen() {
               marginLeft: 4,
             }}
           >
-            設定密碼
+            {t.setPassword}
           </Text>
           <TextInput
-            placeholder="請設定至少 6 位密碼"
+            placeholder={t.setPasswordPlaceholder}
             secureTextEntry
             value={password}
             onChangeText={setPassword}
@@ -194,7 +198,7 @@ export default function RegisterScreen() {
                   marginLeft: 4,
                 }}
               >
-                緊急聯絡電話 1
+                {t.emergencyPhone1}
               </Text>
               <TextInput
                 placeholder="例如：0912345678"
@@ -221,7 +225,7 @@ export default function RegisterScreen() {
                   marginLeft: 4,
                 }}
               >
-                緊急聯絡電話 2
+                {t.emergencyPhone2}
               </Text>
               <TextInput
                 placeholder="例如：0987654321"
@@ -257,7 +261,7 @@ export default function RegisterScreen() {
             <ActivityIndicator color="#FFF" />
           ) : (
             <Text style={{ color: "#FFF", fontSize: 18, fontWeight: "900" }}>
-              完成並註冊
+              {t.finishRegister}
             </Text>
           )}
         </Pressable>
@@ -268,7 +272,7 @@ export default function RegisterScreen() {
         style={{ marginTop: 24, alignSelf: "center" }}
       >
         <Text style={{ color: "#666", fontSize: 15, fontWeight: "600" }}>
-          已有帳號？<Text style={{ color: "#007AFF", fontWeight: "900" }}>返回登入</Text>
+          {t.hasAccount}<Text style={{ color: "#007AFF", fontWeight: "900" }}>{t.backLogin}</Text>
         </Text>
       </Pressable>
     </ScrollView>

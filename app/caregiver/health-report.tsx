@@ -1,4 +1,4 @@
-// app/caregiver/health-report.tsx
+﻿// app/caregiver/health-report.tsx
 import { db } from '@/firebase/firebaseConfig';
 import { router } from 'expo-router';
 import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
@@ -22,10 +22,14 @@ import {
   ChartTimeRange,
   useHealthChartData,
 } from '@/src/health/useHealthChartData';
+import { translations } from '@/src/i18n/translations';
+import { useLanguage } from '@/src/store/LanguageContext';
 
 export default function HealthReportScreen() {
   const { user } = useAuth();
   const { activePatientId } = useActiveCareTarget();
+  const { language } = useLanguage();
+  const t = translations[language];
 
   const [activeTab, setActiveTab] = useState<'today' | 'history'>('today');
 
@@ -44,6 +48,13 @@ export default function HealthReportScreen() {
 
   const dataTypes: ChartDataType[] = ['體溫', '心跳', '血壓', '血糖'];
   const timeRanges: ChartTimeRange[] = ['1周', '2周', '1個月', '全部'];
+  const dataTypeLabels = [t.temperature, t.heartRate, t.bloodPressure, t.bloodSugar];
+  const timeRangeLabels = [
+    language === 'zh' ? '1周' : '1W',
+    language === 'zh' ? '2周' : '2W',
+    language === 'zh' ? '1個月' : '1M',
+    language === 'zh' ? '全部' : 'All',
+  ];
 
   const { loading, empty, lineData, bpSysData, bpDiaData } = useHealthChartData({
     patientId: activePatientId ?? undefined,
@@ -57,13 +68,13 @@ export default function HealthReportScreen() {
 
   const handleSave = async () => {
     if (!user || !activePatientId) {
-      Alert.alert('錯誤', '無法取得目前照顧的長輩資料，請重新選擇。');
+      Alert.alert(t.resultErrorTitle, t.noSelectedPatient);
       return;
     }
 
     const hasData = Object.values(formData).some((val) => val.trim() !== '');
     if (!hasData) {
-      Alert.alert('提示', '請至少輸入一項生理數據後再儲存！');
+      Alert.alert(t.prompt, t.noVitals);
       return;
     }
 
@@ -101,7 +112,7 @@ export default function HealthReportScreen() {
       const docRef = doc(db, 'health_records', customDocId);
       await setDoc(docRef, payload);
 
-      Alert.alert('儲存成功', '健康紀錄已順利上傳！');
+      Alert.alert(t.saveSuccessTitle, t.saveSuccessMessage);
 
       setFormData({
         temperature: '',
@@ -114,7 +125,7 @@ export default function HealthReportScreen() {
       setActiveTab('history');
     } catch (error) {
       console.log('Save health record error:', error);
-      Alert.alert('儲存失敗', '請檢查網路連線後再試一次。');
+      Alert.alert(t.resultSaveFailedTitle, t.uploadFailedMessage);
     } finally {
       setIsSaving(false);
     }
@@ -125,7 +136,7 @@ export default function HealthReportScreen() {
       <View style={styles.topContainer}>
         <View style={styles.headerRow}>
           <Pressable onPress={() => router.back()} style={styles.backButton}>
-            <Text style={styles.backButtonText}>← 返回</Text>
+            <Text style={styles.backButtonText}>← {t.back}</Text>
           </Pressable>
         </View>
 
@@ -140,7 +151,7 @@ export default function HealthReportScreen() {
                 activeTab === 'today' ? styles.tabTextActive : styles.tabTextInactive,
               ]}
             >
-              本日紀錄
+              {t.todayRecords}
             </Text>
           </Pressable>
           <Pressable
@@ -153,7 +164,7 @@ export default function HealthReportScreen() {
                 activeTab === 'history' ? styles.tabTextActive : styles.tabTextInactive,
               ]}
             >
-              歷史趨勢
+              {t.historyTrend}
             </Text>
           </Pressable>
         </View>
@@ -166,7 +177,7 @@ export default function HealthReportScreen() {
         {activeTab === 'today' ? (
           <View style={styles.formContainer}>
             <View style={styles.inputRow}>
-              <Text style={styles.inputLabel}>體溫:</Text>
+              <Text style={styles.inputLabel}>{t.temperature}:</Text>
               <TextInput
                 style={styles.inputField}
                 keyboardType="numeric"
@@ -179,7 +190,7 @@ export default function HealthReportScreen() {
             </View>
 
             <View style={styles.inputRow}>
-              <Text style={styles.inputLabel}>心跳:</Text>
+              <Text style={styles.inputLabel}>{t.heartRate}:</Text>
               <TextInput
                 style={styles.inputField}
                 keyboardType="numeric"
@@ -192,13 +203,13 @@ export default function HealthReportScreen() {
             </View>
 
             <View style={styles.inputRowMulti}>
-              <Text style={[styles.inputLabel, { marginTop: 10 }]}>血壓:</Text>
+              <Text style={[styles.inputLabel, { marginTop: 10 }]}>{t.bloodPressure}:</Text>
               <View style={styles.multiInputCol}>
                 <View style={styles.subInputRow}>
                   <TextInput
                     style={[styles.inputField, { fontSize: 20 }]}
                     keyboardType="numeric"
-                    placeholder="收縮壓"
+                    placeholder={t.systolic}
                     placeholderTextColor="#999"
                     value={formData.systolic}
                     onChangeText={(val) => handleInputChange('systolic', val)}
@@ -209,7 +220,7 @@ export default function HealthReportScreen() {
                   <TextInput
                     style={[styles.inputField, { fontSize: 20 }]}
                     keyboardType="numeric"
-                    placeholder="舒張壓"
+                    placeholder={t.diastolic}
                     placeholderTextColor="#999"
                     value={formData.diastolic}
                     onChangeText={(val) => handleInputChange('diastolic', val)}
@@ -220,7 +231,7 @@ export default function HealthReportScreen() {
             </View>
 
             <View style={styles.inputRowMulti}>
-              <Text style={[styles.inputLabel, { marginTop: 10 }]}>血糖:</Text>
+              <Text style={[styles.inputLabel, { marginTop: 10 }]}>{t.bloodSugar}:</Text>
               <View style={styles.multiInputCol}>
                 <View style={styles.mealTimeRow}>
                   <Pressable
@@ -238,7 +249,7 @@ export default function HealthReportScreen() {
                           : styles.mealBtnTextInactive,
                       ]}
                     >
-                      空腹
+                      {t.fasting}
                     </Text>
                   </Pressable>
                   <Pressable
@@ -256,7 +267,7 @@ export default function HealthReportScreen() {
                           : styles.mealBtnTextInactive,
                       ]}
                     >
-                      飯後
+                      {t.afterMeal}
                     </Text>
                   </Pressable>
                 </View>
@@ -287,14 +298,14 @@ export default function HealthReportScreen() {
               {isSaving ? (
                 <ActivityIndicator color="#FFF" />
               ) : (
-                <Text style={styles.saveButtonText}>儲存</Text>
+                <Text style={styles.saveButtonText}>{t.save}</Text>
               )}
             </Pressable>
           </View>
         ) : (
           <View style={styles.historyContainer}>
             <View style={styles.filterRow}>
-              {dataTypes.map((type) => (
+              {dataTypes.map((type, index) => (
                 <Pressable
                   key={type}
                   onPress={() => setChartDataType(type)}
@@ -311,14 +322,14 @@ export default function HealthReportScreen() {
                         : styles.filterTextInactive,
                     ]}
                   >
-                    {type}
+                    {dataTypeLabels[index]}
                   </Text>
                 </Pressable>
               ))}
             </View>
 
             <View style={styles.filterRow}>
-              {timeRanges.map((range) => (
+              {timeRanges.map((range, index) => (
                 <Pressable
                   key={range}
                   onPress={() => setChartTimeRange(range)}
@@ -337,7 +348,7 @@ export default function HealthReportScreen() {
                         : styles.filterTextInactive,
                     ]}
                   >
-                    {range}
+                    {timeRangeLabels[index]}
                   </Text>
                 </Pressable>
               ))}
