@@ -9,11 +9,13 @@ import {
   orderBy,
   query,
   serverTimestamp,
+  setDoc,
   Timestamp,
   updateDoc,
   where,
 } from "firebase/firestore";
 import {
+  Alert,
   NativeScrollEvent,
   NativeSyntheticEvent,
   Pressable,
@@ -86,7 +88,22 @@ type CalendarEventViewModel = CalendarEventRecord & {
   resolvedDate: Date;
 };
 
+type DailyChecklistItem = {
+  id: string;
+  title: string;
+  completed: boolean;
+  isDefault: boolean;
+  createdAt?: Timestamp | null;
+  updatedAt?: Timestamp | null;
+  completedAt?: Timestamp | null;
+  createdBy: string;
+  caregiverId: string;
+  patientId: string;
+  dateKey: string;
+};
+
 const CALENDAR_EVENTS_COLLECTION = "calendar_events";
+const DEFAULT_DAILY_CHECKLIST_ITEMS = ["喝水1500cc", "運動30分鐘", "睡前關懷"];
 const MONTH_LABELS = [
   "January",
   "February",
@@ -401,8 +418,13 @@ export default function CaregiverCalendarScreen() {
   const [formHour, setFormHour] = useState(7);
   const [formMinute, setFormMinute] = useState(0);
   const [formPeriod, setFormPeriod] = useState<TimePeriod>("pm");
+  const [dailyChecklistItems, setDailyChecklistItems] = useState<DailyChecklistItem[]>([]);
+  const [dailyChecklistExpanded, setDailyChecklistExpanded] = useState(true);
+  const [dailyChecklistInput, setDailyChecklistInput] = useState("");
+  const [editingChecklistItemId, setEditingChecklistItemId] = useState<string | null>(null);
 
   const calendarCells = useMemo(() => getMonthMeta(currentMonth), [currentMonth]);
+  const selectedDateKey = useMemo(() => formatEventDateKey(selectedDate), [selectedDate]);
 
   const monthEvents = useMemo(() => {
     return events
@@ -420,9 +442,37 @@ export default function CaregiverCalendarScreen() {
     [monthEvents, selectedDate]
   );
 
+  const sortedDailyChecklistItems = useMemo(() => {
+    return [...dailyChecklistItems].sort((left, right) => {
+      const leftDefaultIndex = DEFAULT_DAILY_CHECKLIST_ITEMS.indexOf(left.title);
+      const rightDefaultIndex = DEFAULT_DAILY_CHECKLIST_ITEMS.indexOf(right.title);
+
+      if (left.isDefault && right.isDefault && leftDefaultIndex !== rightDefaultIndex) {
+        return leftDefaultIndex - rightDefaultIndex;
+      }
+
+      if (left.isDefault !== right.isDefault) return left.isDefault ? -1 : 1;
+
+      const leftTime = left.createdAt?.toMillis?.() ?? 0;
+      const rightTime = right.createdAt?.toMillis?.() ?? 0;
+      return leftTime - rightTime;
+    });
+  }, [dailyChecklistItems]);
+
+  const completedChecklistCount = useMemo(
+    () => dailyChecklistItems.filter((item) => item.completed).length,
+    [dailyChecklistItems]
+  );
+
   useEffect(() => {
     setMonthMenuOpen(false);
   }, [currentMonth]);
+
+  useEffect(() => {
+    setDailyChecklistInput("");
+    setEditingChecklistItemId(null);
+    setDailyChecklistExpanded(true);
+  }, [selectedDateKey]);
 
   useEffect(() => {
     if (!activePatientId) {
@@ -454,6 +504,86 @@ export default function CaregiverCalendarScreen() {
 
     return () => unsubscribe();
   }, [activePatientId]);
+
+  useEffect(() => {
+    if (!activePatientId || !user?.uid) {
+      setDailyChecklistItems([]);
+      return;
+    }
+
+    const itemsRef = collection(
+      db,
+      "patients",
+      activePatientId,
+      "daily_checklists",
+      selectedDateKey,
+      "items"
+    );
+
+    let seedingDefaults = false;
+
+    const createDefaultItems = async () => {
+      if (seedingDefaults) return;
+      seedingDefaults = true;
+
+      try {
+        await Promise.all(
+          DEFAULT_DAILY_CHECKLIST_ITEMS.map((title, index) =>
+            setDoc(doc(itemsRef, `default-${index + 1}`), {
+              title,
+              completed: false,
+              isDefault: true,
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+              completedAt: null,
+              createdBy: user.uid,
+              caregiverId: user.uid,
+              patientId: activePatientId,
+              dateKey: selectedDateKey,
+            })
+          )
+        );
+      } catch (error) {
+        console.log("seed daily checklist failed:", error);
+      }
+    };
+
+    const unsubscribe = onSnapshot(
+      itemsRef,
+      (snap) => {
+        if (snap.empty) {
+          setDailyChecklistItems([]);
+          void createDefaultItems();
+          return;
+        }
+
+        setDailyChecklistItems(
+          snap.docs.map((docSnap) => {
+            const data = docSnap.data() as Partial<DailyChecklistItem>;
+            return {
+              id: docSnap.id,
+              title: data.title ?? "",
+              completed: data.completed === true,
+              isDefault: data.isDefault === true,
+              createdAt: data.createdAt ?? null,
+              updatedAt: data.updatedAt ?? null,
+              completedAt: data.completedAt ?? null,
+              createdBy: data.createdBy ?? "",
+              caregiverId: data.caregiverId ?? "",
+              patientId: data.patientId ?? activePatientId,
+              dateKey: data.dateKey ?? selectedDateKey,
+            };
+          })
+        );
+      },
+      (error) => {
+        console.log("daily checklist snapshot failed:", error);
+        setDailyChecklistItems([]);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [activePatientId, selectedDateKey, user?.uid]);
 
   useEffect(() => {
     if (language === "zh") return;
@@ -620,6 +750,136 @@ export default function CaregiverCalendarScreen() {
     }
   };
 
+  const getDailyChecklistItemRef = (itemId: string) => {
+    if (!activePatientId) return null;
+
+    return doc(
+      db,
+      "patients",
+      activePatientId,
+      "daily_checklists",
+      selectedDateKey,
+      "items",
+      itemId
+    );
+  };
+
+  const saveDailyChecklistInput = async () => {
+    if (!activePatientId || !user?.uid) return;
+
+    const title = dailyChecklistInput.trim();
+    if (!title) {
+      Alert.alert("請輸入事項", "每日事項不能空白。");
+      return;
+    }
+
+    try {
+      if (editingChecklistItemId) {
+        const itemRef = getDailyChecklistItemRef(editingChecklistItemId);
+        if (!itemRef) return;
+
+        await updateDoc(itemRef, {
+          title,
+          updatedAt: serverTimestamp(),
+        });
+      } else {
+        await addDoc(
+          collection(
+            db,
+            "patients",
+            activePatientId,
+            "daily_checklists",
+            selectedDateKey,
+            "items"
+          ),
+          {
+            title,
+            completed: false,
+            isDefault: false,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+            completedAt: null,
+            createdBy: user.uid,
+            caregiverId: user.uid,
+            patientId: activePatientId,
+            dateKey: selectedDateKey,
+          }
+        );
+      }
+
+      setDailyChecklistInput("");
+      setEditingChecklistItemId(null);
+      setDailyChecklistExpanded(true);
+    } catch (error) {
+      console.log("save daily checklist item failed:", error);
+      Alert.alert("儲存失敗", "無法儲存每日事項，請稍後再試。");
+    }
+  };
+
+  const startEditDailyChecklistItem = (item: DailyChecklistItem) => {
+    setDailyChecklistInput(item.title);
+    setEditingChecklistItemId(item.id);
+    setDailyChecklistExpanded(true);
+  };
+
+  const cancelEditDailyChecklistItem = () => {
+    setDailyChecklistInput("");
+    setEditingChecklistItemId(null);
+  };
+
+  const confirmDeleteDailyChecklistItem = (item: DailyChecklistItem) => {
+    Alert.alert("刪除事項", "確定要刪除這個每日事項嗎？", [
+      { text: "取消", style: "cancel" },
+      {
+        text: "刪除",
+        style: "destructive",
+        onPress: async () => {
+          const itemRef = getDailyChecklistItemRef(item.id);
+          if (!itemRef) return;
+
+          try {
+            await deleteDoc(itemRef);
+          } catch (error) {
+            console.log("delete daily checklist item failed:", error);
+            Alert.alert("刪除失敗", "無法刪除每日事項，請稍後再試。");
+          }
+        },
+      },
+    ]);
+  };
+
+  const toggleDailyChecklistItemCompleted = async (item: DailyChecklistItem) => {
+    if (!user?.uid) return;
+
+    const itemRef = getDailyChecklistItemRef(item.id);
+    if (!itemRef) return;
+
+    const nextCompleted = !item.completed;
+
+    setDailyChecklistItems((prevItems) =>
+      prevItems.map((prevItem) =>
+        prevItem.id === item.id ? { ...prevItem, completed: nextCompleted } : prevItem
+      )
+    );
+
+    try {
+      await updateDoc(itemRef, {
+        completed: nextCompleted,
+        completedAt: nextCompleted ? serverTimestamp() : null,
+        caregiverId: user.uid,
+        updatedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      console.log("toggle daily checklist item failed:", error);
+      setDailyChecklistItems((prevItems) =>
+        prevItems.map((prevItem) =>
+          prevItem.id === item.id ? { ...prevItem, completed: item.completed } : prevItem
+        )
+      );
+      Alert.alert("操作失敗", "無法更新每日事項狀態，請稍後再試。");
+    }
+  };
+
   const renderDayCell = (cell: CalendarCell, index: number) => {
     const dayEvents = monthEvents.filter((event) => sameDate(event.resolvedDate, cell.date));
     const visibleDayEvents = dayEvents.slice(0, MAX_DAY_MARKERS);
@@ -726,6 +986,113 @@ export default function CaregiverCalendarScreen() {
           </View>
 
           <View style={styles.grid}>{calendarCells.map((cell, index) => renderDayCell(cell, index))}</View>
+
+          <View style={styles.dailyChecklistCard}>
+            <View style={styles.dailyChecklistHeader}>
+              <Pressable
+                style={styles.dailyChecklistTitleBlock}
+                onPress={() => setDailyChecklistExpanded((prev) => !prev)}
+              >
+                <Text style={styles.dailyChecklistTitle}>每日清單</Text>
+                <Text style={styles.dailyChecklistDate}>{selectedDateKey} 的事項</Text>
+              </Pressable>
+
+              <View style={styles.dailyChecklistHeaderActions}>
+                <View style={styles.dailyChecklistProgressBadge}>
+                  <Text style={styles.dailyChecklistProgressText}>
+                    {completedChecklistCount}/{dailyChecklistItems.length}
+                  </Text>
+                </View>
+                <Pressable
+                  style={styles.dailyChecklistChevronButton}
+                  onPress={() => setDailyChecklistExpanded((prev) => !prev)}
+                >
+                  <Ionicons
+                    name={dailyChecklistExpanded ? "chevron-up" : "chevron-down"}
+                    size={22}
+                    color="#E86F8D"
+                  />
+                </Pressable>
+              </View>
+            </View>
+
+            {dailyChecklistExpanded && (
+              <View style={styles.dailyChecklistBody}>
+                <View style={styles.dailyChecklistInputRow}>
+                  <TextInput
+                    style={styles.dailyChecklistInput}
+                    value={dailyChecklistInput}
+                    onChangeText={setDailyChecklistInput}
+                    placeholder="新增每日事項，例如：散步 10 分鐘"
+                    placeholderTextColor="#B9A8AE"
+                  />
+                  <Pressable style={styles.dailyChecklistAddButton} onPress={saveDailyChecklistInput}>
+                    <Text style={styles.dailyChecklistAddButtonText}>
+                      {editingChecklistItemId ? "儲存" : "新增"}
+                    </Text>
+                  </Pressable>
+                </View>
+
+                {editingChecklistItemId && (
+                  <Pressable style={styles.dailyChecklistCancelEditButton} onPress={cancelEditDailyChecklistItem}>
+                    <Text style={styles.dailyChecklistCancelEditText}>取消編輯</Text>
+                  </Pressable>
+                )}
+
+                <View style={styles.dailyChecklistItems}>
+                  {sortedDailyChecklistItems.map((item) => (
+                    <View key={item.id} style={styles.dailyChecklistItemRow}>
+                      <Pressable
+                        style={[
+                          styles.dailyChecklistStatusButton,
+                          item.completed
+                            ? styles.dailyChecklistStatusDone
+                            : styles.dailyChecklistStatusPending,
+                        ]}
+                        onPress={() => toggleDailyChecklistItemCompleted(item)}
+                      >
+                        <Text
+                          style={[
+                            styles.dailyChecklistStatusText,
+                            item.completed
+                              ? styles.dailyChecklistStatusDoneText
+                              : styles.dailyChecklistStatusPendingText,
+                          ]}
+                        >
+                          {item.completed ? "已完成" : "未完成"}
+                        </Text>
+                      </Pressable>
+
+                      <Text
+                        style={[
+                          styles.dailyChecklistItemTitle,
+                          item.completed && styles.dailyChecklistItemTitleDone,
+                        ]}
+                        numberOfLines={2}
+                      >
+                        {item.title}
+                      </Text>
+
+                      <Pressable
+                        hitSlop={8}
+                        style={styles.dailyChecklistIconButton}
+                        onPress={() => startEditDailyChecklistItem(item)}
+                      >
+                        <Feather name="edit-2" size={19} color="#6B7280" />
+                      </Pressable>
+                      <Pressable
+                        hitSlop={8}
+                        style={styles.dailyChecklistIconButton}
+                        onPress={() => confirmDeleteDailyChecklistItem(item)}
+                      >
+                        <Ionicons name="trash-outline" size={21} color="#D94E64" />
+                      </Pressable>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
+          </View>
 
           {selectedDayEvents.length > 0 && (
             <View style={styles.eventList}>
@@ -1134,6 +1501,169 @@ const styles = StyleSheet.create({
     color: "#4B5563",
     fontWeight: "700",
     textAlign: "right",
+  },
+  dailyChecklistCard: {
+    marginHorizontal: 22,
+    marginTop: 24,
+    borderRadius: 18,
+    backgroundColor: "#FFFFFF",
+    padding: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.09,
+    shadowRadius: 13,
+    elevation: 4,
+  },
+  dailyChecklistHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  dailyChecklistTitleBlock: {
+    flex: 1,
+    minWidth: 0,
+  },
+  dailyChecklistTitle: {
+    fontSize: 22,
+    lineHeight: 27,
+    fontWeight: "900",
+    color: "#222222",
+  },
+  dailyChecklistDate: {
+    marginTop: 3,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "700",
+    color: "#8B8B8B",
+  },
+  dailyChecklistHeaderActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  dailyChecklistProgressBadge: {
+    minWidth: 48,
+    height: 28,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F8C5C7",
+  },
+  dailyChecklistProgressText: {
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: "900",
+    color: "#FFFFFF",
+  },
+  dailyChecklistChevronButton: {
+    width: 32,
+    height: 32,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  dailyChecklistBody: {
+    marginTop: 14,
+    gap: 10,
+  },
+  dailyChecklistInputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  dailyChecklistInput: {
+    flex: 1,
+    height: 42,
+    borderRadius: 14,
+    backgroundColor: "#FFF2F4",
+    paddingHorizontal: 13,
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: "600",
+    color: "#222222",
+  },
+  dailyChecklistAddButton: {
+    height: 42,
+    minWidth: 58,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F67578",
+    paddingHorizontal: 12,
+  },
+  dailyChecklistAddButtonText: {
+    fontSize: 15,
+    lineHeight: 19,
+    fontWeight: "900",
+    color: "#FFFFFF",
+  },
+  dailyChecklistCancelEditButton: {
+    alignSelf: "flex-end",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  dailyChecklistCancelEditText: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "800",
+    color: "#9CA3AF",
+  },
+  dailyChecklistItems: {
+    gap: 9,
+  },
+  dailyChecklistItemRow: {
+    minHeight: 48,
+    borderRadius: 15,
+    backgroundColor: "#FFF8F9",
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  dailyChecklistStatusButton: {
+    minWidth: 68,
+    height: 30,
+    borderRadius: 15,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 10,
+  },
+  dailyChecklistStatusPending: {
+    backgroundColor: "#FFE1E6",
+  },
+  dailyChecklistStatusDone: {
+    backgroundColor: "#57B66A",
+  },
+  dailyChecklistStatusText: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: "900",
+  },
+  dailyChecklistStatusPendingText: {
+    color: "#E45D79",
+  },
+  dailyChecklistStatusDoneText: {
+    color: "#FFFFFF",
+  },
+  dailyChecklistItemTitle: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: 16,
+    lineHeight: 21,
+    fontWeight: "800",
+    color: "#252525",
+  },
+  dailyChecklistItemTitleDone: {
+    color: "#7A7A7A",
+    textDecorationLine: "line-through",
+  },
+  dailyChecklistIconButton: {
+    width: 30,
+    height: 30,
+    alignItems: "center",
+    justifyContent: "center",
   },
   eventList: {
     paddingHorizontal: 26,

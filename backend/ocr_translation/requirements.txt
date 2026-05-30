@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+google-genai
+pydantic
+python-multipart
+requests
+pillow
+pandas
+rapidfuzz

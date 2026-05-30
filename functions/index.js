@@ -85,6 +85,14 @@ async function getUserPushTokens(userIds) {
       continue;
     }
 
+    const userData = userDoc.data() || {};
+    if (userData.pushToken) {
+      tokens.push(String(userData.pushToken));
+    }
+    if (userData.expoPushToken) {
+      tokens.push(String(userData.expoPushToken));
+    }
+
     const deviceSnap = await userDoc.ref
       .collection("devices")
       .where("enabled", "==", true)
@@ -575,6 +583,117 @@ exports.onCalendarEventCompleted = onDocumentUpdated(
 );
 
 // health_records 新增時，自動判斷是否異常並發通知
+exports.onDailyChecklistItemCompleted = onDocumentUpdated(
+  {
+    document: "patients/{patientId}/daily_checklists/{dateKey}/items/{itemId}",
+    region: "us-central1",
+  },
+  async (event) => {
+    try {
+      const change = event.data;
+      if (!change) return;
+
+      const before = change.before.data() || {};
+      const after = change.after.data() || {};
+      const patientId = String(event.params.patientId || after.patientId || "");
+      const dateKey = String(event.params.dateKey || after.dateKey || "");
+      const itemId = String(event.params.itemId || "");
+      const beforeCompleted = before.completed === true;
+      const afterCompleted = after.completed === true;
+
+      console.log("[daily checklist] triggered", {patientId, dateKey, itemId});
+      console.log("[daily checklist] completed changed", {
+        beforeCompleted,
+        afterCompleted,
+      });
+
+      if (beforeCompleted || !afterCompleted) {
+        return;
+      }
+
+      const itemTitle = String(after.title || "\u6bcf\u65e5\u6e05\u55ae\u9805\u76ee");
+      const caregiverId = String(after.caregiverId || after.createdBy || "");
+
+      if (!patientId) {
+        console.log("[daily checklist] missing patientId", {
+          patientId,
+          dateKey,
+          itemId,
+        });
+        return;
+      }
+
+      const patientSnap = await db.collection("patients").doc(patientId).get();
+      if (!patientSnap.exists) {
+        console.log("[daily checklist] patient not found", {patientId});
+        return;
+      }
+
+      const patient = patientSnap.data() || {};
+      const families = Array.isArray(patient.families) ? patient.families : [];
+      const familyUids = uniqueStrings(families).filter((uid) => uid !== caregiverId);
+
+      console.log("[daily checklist] familyUids", familyUids);
+
+      if (!familyUids.length) {
+        console.log("[daily checklist] no family recipients");
+        return;
+      }
+
+      const patientName = String(patient.name || "");
+      const title = "\u6bcf\u65e5\u6e05\u55ae\u5df2\u5b8c\u6210";
+      const body = patientName + "\u7684\u300c" + itemTitle + "\u300d\u5df2\u5b8c\u6210";
+
+      await Promise.all(familyUids.map(async (familyUid) => {
+        const notificationData = {
+          recipientUid: familyUid,
+          type: "daily_checklist_completed",
+          title,
+          body,
+          patientId,
+          isRead: false,
+          createdAt: FieldValue.serverTimestamp(),
+          metadata: {
+            dateKey,
+            itemId,
+            itemTitle,
+          },
+        };
+
+        const notificationRef = await db.collection("notifications").add(notificationData);
+        console.log("[daily checklist] notification written", {familyUid});
+
+        try {
+          const tokens = await getUserPushTokens([familyUid]);
+          console.log("[daily checklist] push tokens", tokens);
+
+          const result = await sendExpoPush(tokens, title, body, {
+            type: "daily_checklist_completed",
+            patientId,
+            dateKey,
+            itemId,
+            itemTitle,
+            notificationId: notificationRef.id,
+          });
+
+          if (result.success) {
+            console.log("[daily checklist] push sent");
+          } else {
+            console.warn("[daily checklist] push not sent", {
+              familyUid,
+              result,
+            });
+          }
+        } catch (error) {
+          console.warn("[daily checklist] push failed", {familyUid, error});
+        }
+      }));
+    } catch (error) {
+      console.error("[onDailyChecklistItemCompleted] error =", error);
+    }
+  }
+);
+
 exports.onHealthRecordCreated = onDocumentCreated(
   {
     document: "health_records/{recordId}",

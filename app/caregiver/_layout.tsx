@@ -27,6 +27,7 @@ export default function CaregiverLayout() {
     "video-record",
     "health-report",
     "communication-cards",
+    "notebook",
     "notification-detail",
   ];
   const hideBottomNav = hideBottomNavRoutes.includes(currentPage);
@@ -223,7 +224,13 @@ export default function CaregiverLayout() {
               </Pressable>
             </View>
           </View>
-          <Pressable style={styles.menuItem} onPress={() => Alert.alert("提示", "記事本開發中")}>
+          <Pressable
+            style={styles.menuItem}
+            onPress={() => {
+              setIsSidebarOpen(false);
+              router.push("/caregiver/notebook" as any);
+            }}
+          >
             <Text style={styles.menuItemText}>記事本</Text>
           </Pressable>
 

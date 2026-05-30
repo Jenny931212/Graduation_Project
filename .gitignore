@@ -36,6 +36,8 @@ yarn-error.*
 .env*.local
 backend/ocr_translation/.env
 backend/ocr_translation/.venv/
+__pycache__/
+*.pyc
 
 # typescript
 *.tsbuildinfo

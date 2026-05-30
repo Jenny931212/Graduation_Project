@@ -29,6 +29,7 @@ export type NotificationType =
   | "chat_message"
   | "calendar_event"
   | "calendar_event_completed"
+  | "daily_checklist_completed"
   | "health_report_missing"
   | "custom";
 
@@ -52,6 +53,9 @@ export type NotificationDocument = {
     completedBy?: string;
     completedAt?: string;
     eventType?: string;
+    itemTitle?: string;
+    dateKey?: string;
+    caregiverId?: string;
     source?: string;
   };
 };
