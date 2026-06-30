@@ -4,6 +4,10 @@ import { router, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { collection, doc, getDoc, getDocs, query } from "firebase/firestore";
 import { Ionicons } from "@expo/vector-icons";
 import { db } from "@/firebase/firebaseConfig";
+import {
+  ensureFirestoreTranslations,
+  PRESCRIPTION_ITEM_TRANSLATION_SPECS,
+} from "@/src/i18n/dynamicTranslation";
 import { pickLocalizedString, translations } from "@/src/i18n/translations";
 import { useLanguage } from "@/src/store/LanguageContext";
 
@@ -33,8 +37,20 @@ export default function CaregiverDetailScreen() {
       setP({ prescriptionId: presSnap.id, ...data });
 
       const itemsSnap = await getDocs(query(collection(db, "prescriptions", id, "items")));
-      const list = itemsSnap.docs.map((d) => {
-        const it = d.data() as any;
+      const translatedItems = await Promise.all(
+        itemsSnap.docs.map(async (d) => {
+          const raw = d.data() as any;
+          const translated = await ensureFirestoreTranslations(
+            doc(db, "prescriptions", id, "items", d.id),
+            raw,
+            language,
+            PRESCRIPTION_ITEM_TRANSLATION_SPECS
+          );
+          return { id: d.id, data: { ...raw, ...translated } };
+        })
+      );
+      const list = translatedItems.map((d) => {
+        const it = d.data as any;
         return {
           itemId: d.id,
           drug_name: pickLocalizedString(it, "drug_name", language),

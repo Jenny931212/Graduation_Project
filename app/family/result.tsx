@@ -23,6 +23,10 @@ import {
 } from "firebase/firestore";
 import { db } from "@/firebase/firebaseConfig";
 import { useActiveCareTarget } from "@/src/care-target/useActiveCareTarget";
+import {
+  ensureFirestoreTranslations,
+  PRESCRIPTION_ITEM_TRANSLATION_SPECS,
+} from "@/src/i18n/dynamicTranslation";
 import { pickLocalizedString, translations } from "@/src/i18n/translations";
 import { useLanguage } from "@/src/store/LanguageContext";
 
@@ -115,8 +119,19 @@ export default function ResultScreen() {
         );
         const itemsSnap = await getDocs(itemsQ);
 
-        const rows: Item[] = itemsSnap.docs.map((d) => {
-          const raw = d.data() as any;
+        const translatedItems = await Promise.all(
+          itemsSnap.docs.map(async (d) => {
+            const raw = d.data() as any;
+            const translated = await ensureFirestoreTranslations(
+              doc(db, "prescriptions", id, "items", d.id),
+              raw,
+              language,
+              PRESCRIPTION_ITEM_TRANSLATION_SPECS
+            );
+            return { ...raw, ...translated };
+          })
+        );
+        const rows: Item[] = translatedItems.map((raw) => {
           const it = {
             ...raw,
             drug_name_zh: pickLocalizedString(raw, "drug_name", language),
@@ -149,8 +164,7 @@ export default function ResultScreen() {
         router.replace("/family/list");
       }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, editedItems]);
+  }, [id, editedItems, finalImageUri, language, t]);
 
   const goEdit = () => {
     router.replace({

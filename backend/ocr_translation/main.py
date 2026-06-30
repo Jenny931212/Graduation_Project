@@ -24,7 +24,12 @@ app.add_middleware(
 )
 
 # API KEY
-API_KEY = "AIzaSyDbDnZDCopXGKfgI84cMjYKzIvhFLm7V3c"
+API_KEY = os.getenv("GEMINI_API_KEY")
+if not API_KEY:
+    raise RuntimeError(
+        "GEMINI_API_KEY environment variable is required. "
+        "Set it before starting the backend."
+    )
 client = genai.Client(api_key=API_KEY)
 
 # ===== 載入藥物外觀資料庫 =====

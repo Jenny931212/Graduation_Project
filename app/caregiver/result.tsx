@@ -24,6 +24,10 @@ import {
 import { db } from "@/firebase/firebaseConfig";
 import { useActiveCareTarget } from "@/src/care-target/useActiveCareTarget";
 import { useAuth } from "@/src/auth/useAuth";
+import {
+  ensureFirestoreTranslations,
+  PRESCRIPTION_ITEM_TRANSLATION_SPECS,
+} from "@/src/i18n/dynamicTranslation";
 import { createMedicationReminders } from "@/src/reminders/createMedicationReminders";
 import { translations, type Language } from "@/src/i18n/translations";
 import { useLanguage } from "@/src/store/LanguageContext";
@@ -94,6 +98,14 @@ function pickLocalizedString(
   const localized = raw[`${baseName}_${language}`];
   const zh = raw[`${baseName}_zh`];
   const base = raw[baseName];
+
+  if (baseName === "drug_name") {
+    return String(localized ?? zh ?? base ?? raw.drug_name_translated ?? fallbackValue);
+  }
+
+  if (baseName === "note") {
+    return String(localized ?? zh ?? raw.memo ?? base ?? raw.note_translated ?? fallbackValue);
+  }
 
   return String(localized ?? zh ?? base ?? fallbackValue);
 }
@@ -208,7 +220,19 @@ export default function ResultScreen() {
         );
         const itemsSnap = await getDocs(itemsQ);
 
-        const mapped = itemsSnap.docs.map((d) => mapItem(d.data()));
+        const translatedItems = await Promise.all(
+          itemsSnap.docs.map(async (d) => {
+            const raw = d.data() as any;
+            const translated = await ensureFirestoreTranslations(
+              doc(db, "prescriptions", prescriptionId, "items", d.id),
+              raw,
+              language,
+              PRESCRIPTION_ITEM_TRANSLATION_SPECS
+            );
+            return { ...raw, ...translated };
+          })
+        );
+        const mapped = translatedItems.map((item) => mapItem(item));
         setItems(mapped);
 
         setStatus("done");
@@ -218,7 +242,7 @@ export default function ResultScreen() {
         router.replace("/caregiver");
       }
     })();
-  }, [prescriptionId, isDraftMode, safeAnalyze, safeImageUrl, draftTitle, t]);
+  }, [prescriptionId, isDraftMode, safeAnalyze, safeImageUrl, draftTitle, language, t]);
 
   async function handlePrimaryAction() {
     if (isDraftMode) {

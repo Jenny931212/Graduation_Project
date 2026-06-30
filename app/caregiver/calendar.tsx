@@ -5,6 +5,7 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDocs,
   onSnapshot,
   orderBy,
   query,
@@ -13,6 +14,7 @@ import {
   Timestamp,
   updateDoc,
   where,
+  writeBatch,
 } from "firebase/firestore";
 import {
   Alert,
@@ -26,14 +28,14 @@ import {
   View,
 } from "react-native";
 
-import { db } from "@/firebase/firebaseConfig";
+import { auth, db } from "@/firebase/firebaseConfig";
 import { useAuth } from "@/src/auth/useAuth";
 import { useActiveCareTarget } from "@/src/care-target/useActiveCareTarget";
 import {
   ensureFirestoreTranslations,
   pickDynamicLocalizedString,
 } from "@/src/i18n/dynamicTranslation";
-import { translations } from "@/src/i18n/translations";
+import { translations, type Language } from "@/src/i18n/translations";
 import { useLanguage } from "@/src/store/LanguageContext";
 
 type CalendarEventRecord = {
@@ -91,6 +93,9 @@ type CalendarEventViewModel = CalendarEventRecord & {
 type DailyChecklistItem = {
   id: string;
   title: string;
+  title_en?: string;
+  title_vi?: string;
+  title_id?: string;
   completed: boolean;
   isDefault: boolean;
   createdAt?: Timestamp | null;
@@ -100,10 +105,16 @@ type DailyChecklistItem = {
   caregiverId: string;
   patientId: string;
   dateKey: string;
+  dailyChecklistDocId?: string;
 };
 
 const CALENDAR_EVENTS_COLLECTION = "calendar_events";
 const DEFAULT_DAILY_CHECKLIST_ITEMS = ["喝水1500cc", "運動30分鐘", "睡前關懷"];
+const DEFAULT_DAILY_CHECKLIST_TRANSLATION_KEYS = [
+  "dailyChecklistDefaultWater",
+  "dailyChecklistDefaultExercise",
+  "dailyChecklistDefaultCare",
+] as const;
 const MONTH_LABELS = [
   "January",
   "February",
@@ -225,6 +236,31 @@ function getMonthMeta(currentMonth: Date) {
 
 function formatEventDateKey(date: Date) {
   return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+}
+
+function makeCalendarEventDocId(eventDate: string, patientsId?: string) {
+  const patientSuffix = patientsId?.trim().slice(-4);
+  if (!patientSuffix) return "";
+  return `${eventDate}_${patientSuffix}`;
+}
+
+function makeDailyChecklistDocId(dateKey: string, patientsId?: string) {
+  const patientSuffix = patientsId?.trim().slice(-4);
+  if (!patientSuffix) return "";
+  return `${dateKey}_${patientSuffix}`;
+}
+
+function getDailyChecklistItemTitle(
+  item: DailyChecklistItem,
+  t: (typeof translations)[keyof typeof translations],
+  language: Language
+) {
+  const defaultIndex = DEFAULT_DAILY_CHECKLIST_ITEMS.indexOf(item.title);
+  if (item.isDefault && defaultIndex >= 0) {
+    return t[DEFAULT_DAILY_CHECKLIST_TRANSLATION_KEYS[defaultIndex]] || item.title;
+  }
+
+  return pickDynamicLocalizedString(item, "title", language, ["title"], item.title);
 }
 
 function resolveTitle(event: CalendarEventRecord) {
@@ -398,7 +434,7 @@ function WheelColumn<T extends string | number>({
 
 export default function CaregiverCalendarScreen() {
   const { user } = useAuth();
-  const { activePatientId } = useActiveCareTarget();
+  const { activePatientId, activePatient } = useActiveCareTarget();
   const { language } = useLanguage();
   const t = translations[language];
   const weekLabels = language === "zh" ? ["一", "二", "三", "四", "五", "六", "日"] : WEEK_LABELS;
@@ -425,6 +461,11 @@ export default function CaregiverCalendarScreen() {
 
   const calendarCells = useMemo(() => getMonthMeta(currentMonth), [currentMonth]);
   const selectedDateKey = useMemo(() => formatEventDateKey(selectedDate), [selectedDate]);
+  const activePatientsId = activePatient?.patientsId ?? "";
+  const dailyChecklistDocId = useMemo(
+    () => makeDailyChecklistDocId(selectedDateKey, activePatientsId),
+    [activePatientsId, selectedDateKey]
+  );
 
   const monthEvents = useMemo(() => {
     return events
@@ -506,12 +547,27 @@ export default function CaregiverCalendarScreen() {
   }, [activePatientId]);
 
   useEffect(() => {
-    if (!activePatientId || !user?.uid) {
+    if (!activePatientId || !dailyChecklistDocId || !user?.uid) {
       setDailyChecklistItems([]);
       return;
     }
 
+    const checklistRef = doc(
+      db,
+      "patients",
+      activePatientId,
+      "daily_checklists",
+      dailyChecklistDocId
+    );
     const itemsRef = collection(
+      db,
+      "patients",
+      activePatientId,
+      "daily_checklists",
+      dailyChecklistDocId,
+      "items"
+    );
+    const oldItemsRef = collection(
       db,
       "patients",
       activePatientId,
@@ -521,15 +577,70 @@ export default function CaregiverCalendarScreen() {
     );
 
     let seedingDefaults = false;
+    let migratingLegacyItems = false;
+
+    const ensureDailyChecklistParent = async () => {
+      await setDoc(
+        checklistRef,
+        {
+          patientId: activePatientId,
+          patientsId: activePatientsId,
+          dateKey: selectedDateKey,
+          dailyChecklistDocId,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          createdBy: user.uid,
+        },
+        { merge: true }
+      );
+    };
+
+    const migrateLegacyItems = async () => {
+      if (migratingLegacyItems) return false;
+      migratingLegacyItems = true;
+
+      try {
+        const oldSnap = await getDocs(oldItemsRef);
+        if (oldSnap.empty) return false;
+
+        await ensureDailyChecklistParent();
+
+        const batch = writeBatch(db);
+        oldSnap.docs.forEach((oldDoc) => {
+          const oldData = oldDoc.data() as Partial<DailyChecklistItem>;
+          batch.set(doc(itemsRef, oldDoc.id), {
+            title: oldData.title ?? "",
+            completed: oldData.completed === true,
+            isDefault: oldData.isDefault === true,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+            completedAt: oldData.completed === true ? serverTimestamp() : null,
+            createdBy: user.uid,
+            caregiverId: user.uid,
+            patientId: activePatientId,
+            patientsId: activePatientsId,
+            dateKey: selectedDateKey,
+            dailyChecklistDocId,
+          });
+        });
+        await batch.commit();
+        return true;
+      } catch (error) {
+        console.log("migrate legacy daily checklist failed:", error);
+        return false;
+      }
+    };
 
     const createDefaultItems = async () => {
       if (seedingDefaults) return;
       seedingDefaults = true;
 
       try {
-        await Promise.all(
-          DEFAULT_DAILY_CHECKLIST_ITEMS.map((title, index) =>
-            setDoc(doc(itemsRef, `default-${index + 1}`), {
+        await ensureDailyChecklistParent();
+
+        const batch = writeBatch(db);
+        DEFAULT_DAILY_CHECKLIST_ITEMS.forEach((title, index) => {
+          batch.set(doc(itemsRef, `default-${index + 1}`), {
               title,
               completed: false,
               isDefault: true,
@@ -539,10 +650,12 @@ export default function CaregiverCalendarScreen() {
               createdBy: user.uid,
               caregiverId: user.uid,
               patientId: activePatientId,
+              patientsId: activePatientsId,
               dateKey: selectedDateKey,
-            })
-          )
-        );
+              dailyChecklistDocId,
+            });
+        });
+        await batch.commit();
       } catch (error) {
         console.log("seed daily checklist failed:", error);
       }
@@ -553,7 +666,12 @@ export default function CaregiverCalendarScreen() {
       (snap) => {
         if (snap.empty) {
           setDailyChecklistItems([]);
-          void createDefaultItems();
+          void (async () => {
+            const migrated = await migrateLegacyItems();
+            if (!migrated) {
+              await createDefaultItems();
+            }
+          })();
           return;
         }
 
@@ -563,6 +681,9 @@ export default function CaregiverCalendarScreen() {
             return {
               id: docSnap.id,
               title: data.title ?? "",
+              title_en: data.title_en ?? "",
+              title_vi: data.title_vi ?? "",
+              title_id: data.title_id ?? "",
               completed: data.completed === true,
               isDefault: data.isDefault === true,
               createdAt: data.createdAt ?? null,
@@ -572,6 +693,7 @@ export default function CaregiverCalendarScreen() {
               caregiverId: data.caregiverId ?? "",
               patientId: data.patientId ?? activePatientId,
               dateKey: data.dateKey ?? selectedDateKey,
+              dailyChecklistDocId: data.dailyChecklistDocId ?? dailyChecklistDocId,
             };
           })
         );
@@ -583,7 +705,30 @@ export default function CaregiverCalendarScreen() {
     );
 
     return () => unsubscribe();
-  }, [activePatientId, selectedDateKey, user?.uid]);
+  }, [activePatientId, activePatientsId, dailyChecklistDocId, selectedDateKey, user?.uid]);
+
+  useEffect(() => {
+    if (!activePatientId || !dailyChecklistDocId || language === "zh") return;
+
+    dailyChecklistItems.forEach((item) => {
+      if (item.isDefault) return;
+
+      void ensureFirestoreTranslations(
+        doc(
+          db,
+          "patients",
+          activePatientId,
+          "daily_checklists",
+          dailyChecklistDocId,
+          "items",
+          item.id
+        ),
+        item,
+        language,
+        [{ baseName: "title", sourceKeys: ["title"] }]
+      );
+    });
+  }, [activePatientId, dailyChecklistDocId, dailyChecklistItems, language]);
 
   useEffect(() => {
     if (language === "zh") return;
@@ -671,7 +816,13 @@ export default function CaregiverCalendarScreen() {
 
     const startDate = buildEventDate(selectedDate, formHour, formMinute, formPeriod);
     const eventDate = formatEventDateKey(startDate);
-    const payload = {
+    const calendarEventDocId = makeCalendarEventDocId(eventDate, activePatientsId);
+    if (!calendarEventDocId) return;
+
+    const eventRef = doc(db, CALENDAR_EVENTS_COLLECTION, calendarEventDocId);
+    const getErrorCode = (error: unknown) =>
+      typeof error === "object" && error !== null && "code" in error ? error.code : undefined;
+    const mutablePayload = {
       name: form.personName.trim(),
       personName: form.personName.trim(),
       name_zh: form.personName.trim(),
@@ -688,25 +839,38 @@ export default function CaregiverCalendarScreen() {
       period: formPeriod,
       updatedAt: serverTimestamp(),
     };
+    const createPayload = {
+      patientId: activePatientId,
+      patientsId: activePatientsId,
+      createdBy: user.uid,
+      createdAt: serverTimestamp(),
+      isCompleted: false,
+      ...mutablePayload,
+    };
 
     try {
-      if (editingEventId) {
-        await updateDoc(doc(db, CALENDAR_EVENTS_COLLECTION, editingEventId), payload);
-      } else {
-        await addDoc(collection(db, CALENDAR_EVENTS_COLLECTION), {
-          patientId: activePatientId,
-          createdBy: user.uid,
-          createdAt: serverTimestamp(),
-          isCompleted: false,
-          ...payload,
+      await setDoc(eventRef, createPayload);
+    } catch (createError) {
+      try {
+        await updateDoc(eventRef, mutablePayload);
+      } catch (updateError) {
+        console.log("save calendar event failed:", {
+          calendarEventDocId,
+          eventRefPath: eventRef.path,
+          createErrorCode: getErrorCode(createError),
+          updateErrorCode: getErrorCode(updateError),
+          createPayloadKeys: Object.keys(createPayload),
+          mutablePayloadKeys: Object.keys(mutablePayload),
+          authCurrentUserUid: auth.currentUser?.uid,
+          createError,
+          updateError,
         });
+        return;
       }
-
-      setFormOpen(false);
-      resetForm();
-    } catch (error) {
-      console.log("save calendar event failed:", error);
     }
+
+    setFormOpen(false);
+    resetForm();
   };
 
   const handleDeleteEvent = async (eventId: string) => {
@@ -751,21 +915,21 @@ export default function CaregiverCalendarScreen() {
   };
 
   const getDailyChecklistItemRef = (itemId: string) => {
-    if (!activePatientId) return null;
+    if (!activePatientId || !dailyChecklistDocId) return null;
 
     return doc(
       db,
       "patients",
       activePatientId,
       "daily_checklists",
-      selectedDateKey,
+      dailyChecklistDocId,
       "items",
       itemId
     );
   };
 
   const saveDailyChecklistInput = async () => {
-    if (!activePatientId || !user?.uid) return;
+    if (!activePatientId || !dailyChecklistDocId || !user?.uid) return;
 
     const title = dailyChecklistInput.trim();
     if (!title) {
@@ -783,13 +947,27 @@ export default function CaregiverCalendarScreen() {
           updatedAt: serverTimestamp(),
         });
       } else {
+        await setDoc(
+          doc(db, "patients", activePatientId, "daily_checklists", dailyChecklistDocId),
+          {
+            patientId: activePatientId,
+            patientsId: activePatientsId,
+            dateKey: selectedDateKey,
+            dailyChecklistDocId,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+            createdBy: user.uid,
+          },
+          { merge: true }
+        );
+
         await addDoc(
           collection(
             db,
             "patients",
             activePatientId,
             "daily_checklists",
-            selectedDateKey,
+            dailyChecklistDocId,
             "items"
           ),
           {
@@ -802,7 +980,9 @@ export default function CaregiverCalendarScreen() {
             createdBy: user.uid,
             caregiverId: user.uid,
             patientId: activePatientId,
+            patientsId: activePatientsId,
             dateKey: selectedDateKey,
+            dailyChecklistDocId,
           }
         );
       }
@@ -1070,7 +1250,7 @@ export default function CaregiverCalendarScreen() {
                         ]}
                         numberOfLines={2}
                       >
-                        {item.title}
+                        {getDailyChecklistItemTitle(item, t, language)}
                       </Text>
 
                       <Pressable

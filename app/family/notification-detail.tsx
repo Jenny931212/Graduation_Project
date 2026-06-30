@@ -4,11 +4,11 @@ import {
   NOTIFICATIONS_COLLECTION,
   type NotificationDocument,
 } from "@/src/notifications/notificationSchema";
-import {
-  ensureFirestoreTranslations,
-  pickDynamicLocalizedString,
-} from "@/src/i18n/dynamicTranslation";
 import { translations } from "@/src/i18n/translations";
+import {
+  buildNotificationBody,
+  getNotificationTitle,
+} from "@/src/notifications/notificationText";
 import { useLanguage } from "@/src/store/LanguageContext";
 import { doc, getDoc } from "firebase/firestore";
 import { router, useLocalSearchParams } from "expo-router";
@@ -112,18 +112,8 @@ export default function FamilyNotificationDetailScreen() {
           return;
         }
 
-        const translatedFields = await ensureFirestoreTranslations(
-          doc(db, NOTIFICATIONS_COLLECTION, notificationId),
-          data,
-          language,
-          [
-            { baseName: "title", sourceKeys: ["title"] },
-            { baseName: "body", sourceKeys: ["body"] },
-          ]
-        );
-
         if (!alive) return;
-        setNotification({ ...data, ...translatedFields });
+        setNotification(data);
       } catch (error) {
         console.log("family notification detail load failed:", error);
         if (alive) {
@@ -143,20 +133,8 @@ export default function FamilyNotificationDetailScreen() {
   }, [currentUser?.uid, notificationId, language, t]);
 
   const displayBody = useMemo(() => buildDetailBody(notification), [notification]);
-  const displayTitle = pickDynamicLocalizedString(
-    notification,
-    "title",
-    language,
-    ["title"],
-    t.notification
-  );
-  const localizedBody = pickDynamicLocalizedString(
-    notification,
-    "body",
-    language,
-    ["body"],
-    displayBody
-  );
+  const displayTitle = getNotificationTitle(notification, t);
+  const localizedBody = buildNotificationBody(notification, t) || displayBody;
   const displayTime =
     pickText(notification, ["time", "scheduleTime", "eventTime"]) ||
     formatCreatedAt(notification?.createdAt);

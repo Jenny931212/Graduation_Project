@@ -4,6 +4,10 @@ import { router, useLocalSearchParams, useFocusEffect, Tabs } from "expo-router"
 import { doc, getDoc, collection, getDocs, query } from "firebase/firestore";
 import { db } from "@/firebase/firebaseConfig";
 import { useAuthContext } from "@/src/auth/AuthProvider";
+import {
+  ensureFirestoreTranslations,
+  PRESCRIPTION_ITEM_TRANSLATION_SPECS,
+} from "@/src/i18n/dynamicTranslation";
 import { pickLocalizedString, translations } from "@/src/i18n/translations";
 import { useLanguage } from "@/src/store/LanguageContext";
 import { Ionicons } from "@expo/vector-icons";
@@ -26,8 +30,20 @@ export default function FamilyDetailScreen() {
 
         // 1. 抓取子集合資料
         const itemsSnap = await getDocs(query(collection(db, "prescriptions", id, "items")));
-        const mappedItems = itemsSnap.docs.map(d => {
-          const raw = d.data() as any;
+        const translatedItems = await Promise.all(
+          itemsSnap.docs.map(async (d) => {
+            const raw = d.data() as any;
+            const translated = await ensureFirestoreTranslations(
+              doc(db, "prescriptions", id, "items", d.id),
+              raw,
+              language,
+              PRESCRIPTION_ITEM_TRANSLATION_SPECS
+            );
+            return { raw: { ...raw, ...translated } };
+          })
+        );
+        const mappedItems = translatedItems.map((d) => {
+          const raw = d.raw;
           const it = {
             ...raw,
             drug_name: pickLocalizedString(raw, "drug_name", language, raw.name ?? ""),

@@ -9,10 +9,27 @@ import { ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, Tex
 import { db, storage } from '@/firebase/firebaseConfig';
 import { useAuth } from '@/src/auth/useAuth';
 import { useActiveCareTarget } from '@/src/care-target/useActiveCareTarget';
-import { translations } from '@/src/i18n/translations';
+import {
+  ensureAbnormalRecordEntryTranslation,
+  ensureFirestoreTranslations,
+  pickDynamicLocalizedString,
+} from '@/src/i18n/dynamicTranslation';
+import { translations, type Language } from '@/src/i18n/translations';
 import { useLanguage } from '@/src/store/LanguageContext';
 import { arrayRemove, arrayUnion, collection, deleteDoc, doc, onSnapshot, orderBy, query, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
+
+function pickAbnormalTitle(record: any, language: Language) {
+  return pickDynamicLocalizedString(record, 'title', language, ['titleZh', 'titleOriginal'], record?.titleOriginal ?? '');
+}
+
+function pickAbnormalNotes(record: any, language: Language) {
+  return pickDynamicLocalizedString(record, 'notes', language, ['notesZh', 'notesOriginal'], record?.notesOriginal ?? '');
+}
+
+function pickAbnormalEntryNotes(entry: any, language: Language) {
+  return pickDynamicLocalizedString(entry, 'notes', language, ['notesZh', 'notesOriginal'], entry?.notesOriginal ?? '');
+}
 
 export default function AbnormalRecordScreen() {
   const { user } = useAuth();
@@ -69,9 +86,56 @@ export default function AbnormalRecordScreen() {
   useEffect(() => {
     if (selectedRecord) {
       const updatedRecord = records.find(r => r.id === selectedRecord.id);
-      if (updatedRecord) setSelectedRecord(updatedRecord);
+      if (updatedRecord && updatedRecord !== selectedRecord) setSelectedRecord(updatedRecord);
     }
-  }, [records]);
+  }, [records, selectedRecord]);
+
+  useEffect(() => {
+    if (!selectedRecord || !selectedFolderEntry) return;
+
+    const updatedEntry = selectedRecord.entries?.find(
+      (entry: any) => entry.entryId === selectedFolderEntry.entryId
+    );
+    if (updatedEntry && updatedEntry !== selectedFolderEntry) setSelectedFolderEntry(updatedEntry);
+  }, [selectedFolderEntry, selectedRecord]);
+
+  useEffect(() => {
+    if (
+      language === 'zh' ||
+      !selectedRecord?.id ||
+      !['detail', 'folder', 'folderEntryDetail'].includes(currentView)
+    ) {
+      return;
+    }
+
+    void ensureFirestoreTranslations(
+      doc(db, 'abnormal_records', selectedRecord.id),
+      selectedRecord,
+      language,
+      [
+        { baseName: 'title', sourceKeys: ['titleZh', 'titleOriginal'] },
+        { baseName: 'notes', sourceKeys: ['notesZh', 'notesOriginal'] },
+      ]
+    );
+  }, [currentView, language, selectedRecord]);
+
+  useEffect(() => {
+    if (
+      language === 'zh' ||
+      currentView !== 'folderEntryDetail' ||
+      !selectedRecord?.id ||
+      !selectedFolderEntry?.entryId
+    ) {
+      return;
+    }
+
+    void ensureAbnormalRecordEntryTranslation(
+      db,
+      doc(db, 'abnormal_records', selectedRecord.id),
+      selectedFolderEntry,
+      language
+    );
+  }, [currentView, language, selectedFolderEntry, selectedRecord?.id]);
 
   // ==========================================
   // 2. 拍攝或選擇媒體
@@ -371,7 +435,7 @@ export default function AbnormalRecordScreen() {
         </View>
 
         <View style={styles.detailHeaderRow}>
-          <Text style={styles.detailTitle}>{isDoctorMode ? (selectedRecord.titleZh || t.aiTranslating) : selectedRecord.titleOriginal}</Text>
+          <Text style={styles.detailTitle}>{isDoctorMode ? (pickAbnormalTitle(selectedRecord, language) || t.aiTranslating) : selectedRecord.titleOriginal}</Text>
           
           <View style={{ position: 'relative', zIndex: 50 }}>
             <Pressable onPress={() => setDropdownOpen(!dropdownOpen)} style={{ paddingHorizontal: 8, paddingBottom: 8 }}>
@@ -390,7 +454,7 @@ export default function AbnormalRecordScreen() {
         <View style={styles.noteBox}>
           <Text style={styles.noteTitle}>{t.note}:</Text>
           <Text style={[styles.noteText, isDoctorMode && { fontSize: 18 }]}>
-            {isDoctorMode ? (selectedRecord.notesZh || t.aiTranslating) : selectedRecord.notesOriginal}
+            {isDoctorMode ? (pickAbnormalNotes(selectedRecord, language) || t.aiTranslating) : selectedRecord.notesOriginal}
           </Text>
         </View>
       </ScrollView>
@@ -423,7 +487,7 @@ export default function AbnormalRecordScreen() {
         <View style={styles.folderHeader}>
           <Ionicons name="folder-open" size={36} color="#7BC6F9" style={{ marginRight: 12 }} />
           <View style={{ flex: 1 }}>
-            <Text style={styles.detailTitle}>{isDoctorMode ? (selectedRecord.titleZh || t.aiTranslating) : selectedRecord.titleOriginal}</Text>
+            <Text style={styles.detailTitle}>{isDoctorMode ? (pickAbnormalTitle(selectedRecord, language) || t.aiTranslating) : selectedRecord.titleOriginal}</Text>
             <Text style={styles.detailDate}>建立於: {selectedRecord.displayDate}</Text>
           </View>
         </View>
@@ -455,7 +519,7 @@ export default function AbnormalRecordScreen() {
                     ) : <Ionicons name="document-text" size={32} color="#CCC" />}
                   </View>
                   <View style={{ flex: 1, justifyContent: 'center' }}>
-                    <Text style={styles.timelineNotes} numberOfLines={2}>{isDoctorMode ? (entry.notesZh || t.aiTranslatingShort) : entry.notesOriginal}</Text>
+                    <Text style={styles.timelineNotes} numberOfLines={2}>{isDoctorMode ? (pickAbnormalEntryNotes(entry, language) || t.aiTranslatingShort) : entry.notesOriginal}</Text>
                     <Text style={styles.timelineMore}>{t.viewMore}</Text>
                   </View>
                 </View>
@@ -482,7 +546,7 @@ export default function AbnormalRecordScreen() {
 
           <View style={styles.folderBadge}>
             <Ionicons name="folder" size={16} color="#E59752" style={{ marginRight: 6 }} />
-            <Text style={styles.folderBadgeText}>{t.fromFolder}: {isDoctorMode ? (selectedRecord.titleZh || selectedRecord.titleOriginal) : selectedRecord.titleOriginal}</Text>
+            <Text style={styles.folderBadgeText}>{t.fromFolder}: {isDoctorMode ? (pickAbnormalTitle(selectedRecord, language) || selectedRecord.titleOriginal) : selectedRecord.titleOriginal}</Text>
           </View>
 
           <View style={styles.mediaContainer}>
@@ -508,7 +572,7 @@ export default function AbnormalRecordScreen() {
           <Text style={styles.detailDate}>{eDateStr}</Text>
           <View style={styles.noteBox}>
             <Text style={styles.noteTitle}>{t.note}:</Text>
-            <Text style={[styles.noteText, isDoctorMode && { fontSize: 18 }]}>{isDoctorMode ? (selectedFolderEntry.notesZh || t.aiTranslating) : selectedFolderEntry.notesOriginal}</Text>
+            <Text style={[styles.noteText, isDoctorMode && { fontSize: 18 }]}>{isDoctorMode ? (pickAbnormalEntryNotes(selectedFolderEntry, language) || t.aiTranslating) : selectedFolderEntry.notesOriginal}</Text>
           </View>
         </ScrollView>
       </View>

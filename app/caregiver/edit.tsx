@@ -6,6 +6,10 @@ import { Ionicons } from "@expo/vector-icons";
 import { doc, collection, getDoc, getDocs, query, where, writeBatch, serverTimestamp } from "firebase/firestore";
 import { db } from "@/firebase/firebaseConfig";
 import { createMedicationReminders } from "@/src/reminders/createMedicationReminders";
+import {
+  ensureFirestoreTranslations,
+  PRESCRIPTION_ITEM_TRANSLATION_SPECS,
+} from "@/src/i18n/dynamicTranslation";
 import { pickLocalizedString, translations, type Language } from "@/src/i18n/translations";
 import { useLanguage } from "@/src/store/LanguageContext";
 
@@ -53,8 +57,20 @@ export default function CaregiverEditScreen() {
     (async () => {
       try {
         const itemsSnap = await getDocs(query(collection(db, "prescriptions", id, "items")));
-        const fetchedItems: EditItem[] = itemsSnap.docs.map((docSnap) => {
-          const it = docSnap.data() as any;
+        const translatedItems = await Promise.all(
+          itemsSnap.docs.map(async (docSnap) => {
+            const raw = docSnap.data() as any;
+            const translated = await ensureFirestoreTranslations(
+              doc(db, "prescriptions", id, "items", docSnap.id),
+              raw,
+              language,
+              PRESCRIPTION_ITEM_TRANSLATION_SPECS
+            );
+            return { id: docSnap.id, data: { ...raw, ...translated } };
+          })
+        );
+        const fetchedItems: EditItem[] = translatedItems.map((docSnap) => {
+          const it = docSnap.data as any;
           const usage = pickLocalizedString(it, "usage", language, it.usage_zh ?? it.usage ?? it.time_of_day ?? it.time ?? "");
           const parts = usage.includes(",") ? usage.split(",") : [usage, ""];
 

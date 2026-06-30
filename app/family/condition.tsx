@@ -7,9 +7,22 @@ import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 // Firebase 相關
 import { db } from '@/firebase/firebaseConfig';
 import { useActiveCareTarget } from '@/src/care-target/useActiveCareTarget';
-import { translations } from '@/src/i18n/translations';
+import { pickDynamicLocalizedString } from '@/src/i18n/dynamicTranslation';
+import { translations, type Language } from '@/src/i18n/translations';
 import { useLanguage } from '@/src/store/LanguageContext';
 import { collection, onSnapshot, orderBy, query, where } from 'firebase/firestore';
+
+function pickAbnormalTitle(record: any, language: Language) {
+  return pickDynamicLocalizedString(record, 'title', language, ['titleZh', 'titleOriginal'], record?.titleOriginal ?? '');
+}
+
+function pickAbnormalNotes(record: any, language: Language) {
+  return pickDynamicLocalizedString(record, 'notes', language, ['notesZh', 'notesOriginal'], record?.notesOriginal ?? '');
+}
+
+function pickAbnormalEntryNotes(entry: any, language: Language) {
+  return pickDynamicLocalizedString(entry, 'notes', language, ['notesZh', 'notesOriginal'], entry?.notesOriginal ?? '');
+}
 
 export default function FamilyConditionScreen() {
   const { activePatientId } = useActiveCareTarget();
@@ -178,7 +191,7 @@ export default function FamilyConditionScreen() {
         </View>
 
         <View style={styles.detailHeaderRow}>
-          <Text style={styles.detailTitle}>{isDoctorMode ? (selectedRecord?.titleZh || t.aiTranslating) : selectedRecord?.titleOriginal}</Text>
+          <Text style={styles.detailTitle}>{isDoctorMode ? (pickAbnormalTitle(selectedRecord, language) || t.aiTranslating) : selectedRecord?.titleOriginal}</Text>
         </View>
 
         <Text style={styles.detailDate}>{selectedRecord?.displayDate}</Text>
@@ -186,7 +199,7 @@ export default function FamilyConditionScreen() {
         <View style={styles.noteBox}>
           <Text style={styles.noteTitle}>{t.note}：</Text>
           <Text style={[styles.noteText, isDoctorMode && { fontSize: 18 }]}>
-            {isDoctorMode ? (selectedRecord?.notesZh || t.aiTranslating) : selectedRecord?.notesOriginal}
+            {isDoctorMode ? (pickAbnormalNotes(selectedRecord, language) || t.aiTranslating) : selectedRecord?.notesOriginal}
           </Text>
         </View>
       </ScrollView>
@@ -206,7 +219,7 @@ export default function FamilyConditionScreen() {
         <View style={styles.folderHeader}>
           <Ionicons name="folder-open" size={36} color="#7BC6F9" style={{ marginRight: 12 }} />
           <View style={{ flex: 1 }}>
-            <Text style={styles.detailTitle}>{isDoctorMode ? (selectedRecord?.titleZh || t.aiTranslating) : selectedRecord?.titleOriginal}</Text>
+            <Text style={styles.detailTitle}>{isDoctorMode ? (pickAbnormalTitle(selectedRecord, language) || t.aiTranslating) : selectedRecord?.titleOriginal}</Text>
             <Text style={styles.detailDate}>{t.createdAt}: {selectedRecord?.displayDate}</Text>
           </View>
         </View>
@@ -238,7 +251,7 @@ export default function FamilyConditionScreen() {
                     ) : <Ionicons name="document-text" size={32} color="#CCC" />}
                   </View>
                   <View style={{ flex: 1, justifyContent: 'center' }}>
-                    <Text style={styles.timelineNotes} numberOfLines={2}>{isDoctorMode ? (entry.notesZh || t.aiTranslatingShort) : entry.notesOriginal}</Text>
+                    <Text style={styles.timelineNotes} numberOfLines={2}>{isDoctorMode ? (pickAbnormalEntryNotes(entry, language) || t.aiTranslatingShort) : entry.notesOriginal}</Text>
                     <Text style={styles.timelineMore}>{t.viewMore}</Text>
                   </View>
                 </View>
@@ -266,7 +279,7 @@ export default function FamilyConditionScreen() {
 
           <View style={styles.folderBadge}>
             <Ionicons name="folder" size={16} color="#E59752" style={{ marginRight: 6 }} />
-            <Text style={styles.folderBadgeText}>{t.fromFolder}：{isDoctorMode ? (selectedRecord?.titleZh || selectedRecord?.titleOriginal) : selectedRecord?.titleOriginal}</Text>
+            <Text style={styles.folderBadgeText}>{t.fromFolder}：{isDoctorMode ? (pickAbnormalTitle(selectedRecord, language) || selectedRecord?.titleOriginal) : selectedRecord?.titleOriginal}</Text>
           </View>
 
           <View style={styles.mediaContainer}>
@@ -282,7 +295,7 @@ export default function FamilyConditionScreen() {
           <View style={styles.noteBox}>
             <Text style={styles.noteTitle}>{t.note}：</Text>
             <Text style={[styles.noteText, isDoctorMode && { fontSize: 18 }]}>
-              {isDoctorMode ? (selectedFolderEntry?.notesZh || t.aiTranslating) : selectedFolderEntry?.notesOriginal}
+              {isDoctorMode ? (pickAbnormalEntryNotes(selectedFolderEntry, language) || t.aiTranslating) : selectedFolderEntry?.notesOriginal}
             </Text>
           </View>
         </ScrollView>

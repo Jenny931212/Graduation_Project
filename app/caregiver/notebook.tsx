@@ -29,11 +29,22 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { db } from "@/firebase/firebaseConfig";
 import { useAuth } from "@/src/auth/useAuth";
 import { useActiveCareTarget } from "@/src/care-target/useActiveCareTarget";
+import {
+  ensureFirestoreTranslations,
+  pickDynamicLocalizedString,
+} from "@/src/i18n/dynamicTranslation";
+import { useLanguage } from "@/src/store/LanguageContext";
 
 type CareNote = {
   id: string;
   title: string;
   content: string;
+  title_en?: string;
+  title_vi?: string;
+  title_id?: string;
+  content_en?: string;
+  content_vi?: string;
+  content_id?: string;
   pinned: boolean;
   createdAt?: Timestamp | null;
   updatedAt?: Timestamp | null;
@@ -74,6 +85,7 @@ export default function CaregiverNotebookScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const { activePatientId, activePatient, ready } = useActiveCareTarget();
+  const { language } = useLanguage();
 
   const [notes, setNotes] = useState<CareNote[]>([]);
   const [loading, setLoading] = useState(true);
@@ -110,6 +122,12 @@ export default function CaregiverNotebookScreen() {
             id: docSnap.id,
             title: data.title ?? "",
             content: data.content ?? "",
+            title_en: data.title_en ?? "",
+            title_vi: data.title_vi ?? "",
+            title_id: data.title_id ?? "",
+            content_en: data.content_en ?? "",
+            content_vi: data.content_vi ?? "",
+            content_id: data.content_id ?? "",
             pinned: data.pinned === true,
             createdAt: data.createdAt ?? null,
             updatedAt: data.updatedAt ?? null,
@@ -132,6 +150,22 @@ export default function CaregiverNotebookScreen() {
 
     return () => unsubscribe();
   }, [activePatientId, ready]);
+
+  useEffect(() => {
+    if (!activePatientId || language === "zh") return;
+
+    notes.forEach((note) => {
+      void ensureFirestoreTranslations(
+        doc(db, "patients", activePatientId, "care_notes", note.id),
+        note,
+        language,
+        [
+          { baseName: "title", sourceKeys: ["title"] },
+          { baseName: "content", sourceKeys: ["content"] },
+        ]
+      );
+    });
+  }, [activePatientId, language, notes]);
 
   const resetForm = () => {
     setForm(emptyForm);
@@ -296,13 +330,29 @@ export default function CaregiverNotebookScreen() {
                   <Text style={styles.emptyNoteText}>尚無照護記事</Text>
                 </View>
               ) : (
-                sortedNotes.map((note) => (
+                sortedNotes.map((note) => {
+                  const localizedTitle = pickDynamicLocalizedString(
+                    note,
+                    "title",
+                    language,
+                    ["title"],
+                    note.title
+                  );
+                  const localizedContent = pickDynamicLocalizedString(
+                    note,
+                    "content",
+                    language,
+                    ["content"],
+                    note.content
+                  );
+
+                  return (
                   <View key={note.id} style={styles.noteCard}>
                     <View style={styles.noteHeader}>
                       <View style={styles.noteTitleWrap}>
                         <Text style={styles.noteTitle} numberOfLines={2}>
                           {note.pinned ? "📌 " : ""}
-                          {note.title}
+                          {localizedTitle}
                         </Text>
                         <Text style={styles.noteTime}>更新時間：{formatUpdatedAt(note.updatedAt)}</Text>
                       </View>
@@ -312,7 +362,7 @@ export default function CaregiverNotebookScreen() {
                       </Pressable>
                     </View>
 
-                    <Text style={styles.noteContent}>{note.content || "沒有內容"}</Text>
+                    <Text style={styles.noteContent}>{localizedContent || "沒有內容"}</Text>
 
                     <View style={styles.noteActions}>
                       <Pressable style={styles.editButton} onPress={() => openEditModal(note)}>
@@ -323,7 +373,8 @@ export default function CaregiverNotebookScreen() {
                       </Pressable>
                     </View>
                   </View>
-                ))
+                  );
+                })
               )}
             </View>
           </>

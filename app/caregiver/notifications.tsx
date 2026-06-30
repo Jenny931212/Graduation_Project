@@ -13,11 +13,8 @@ import { router } from "expo-router";
 
 import { db } from "@/firebase/firebaseConfig";
 import { useAuth } from "@/src/auth/useAuth";
-import {
-  ensureFirestoreTranslations,
-  pickDynamicLocalizedString,
-} from "@/src/i18n/dynamicTranslation";
 import { translations } from "@/src/i18n/translations";
+import { getNotificationText } from "@/src/notifications/notificationText";
 import {
   NOTIFICATIONS_COLLECTION,
   type NotificationDocument,
@@ -65,22 +62,6 @@ export default function CaregiverNotificationsScreen() {
     return () => unsub();
   }, [currentUser?.uid]);
 
-  useEffect(() => {
-    if (language === "zh") return;
-
-    notifications.forEach((item) => {
-      void ensureFirestoreTranslations(
-        doc(db, NOTIFICATIONS_COLLECTION, item.id),
-        item,
-        language,
-        [
-          { baseName: "title", sourceKeys: ["title"] },
-          { baseName: "body", sourceKeys: ["body"] },
-        ]
-      );
-    });
-  }, [notifications, language]);
-
   const formatTime = (createdAt: NotificationDocument["createdAt"]) => {
     if (!createdAt) return "";
     return createdAt.toDate().toLocaleTimeString("zh-TW", {
@@ -115,8 +96,7 @@ export default function CaregiverNotificationsScreen() {
       >
         {notifications.map((item, index) => {
           const isUnread = item.isRead !== true;
-          const title = pickDynamicLocalizedString(item, "title", language, ["title"], t.notification);
-          const body = pickDynamicLocalizedString(item, "body", language, ["body"]);
+          const { title, body } = getNotificationText(item, t);
 
           return (
             <Pressable

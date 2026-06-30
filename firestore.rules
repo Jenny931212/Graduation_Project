@@ -170,7 +170,13 @@ service cloud.firestore {
           && request.resource.data.createdAt == resource.data.createdAt
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             "title",
+            "title_en",
+            "title_vi",
+            "title_id",
             "content",
+            "content_en",
+            "content_vi",
+            "content_id",
             "pinned",
             "updatedAt"
           ])
@@ -179,17 +185,90 @@ service cloud.firestore {
           && request.resource.data.pinned is bool
           && request.resource.data.updatedAt == request.time;
 
+        allow update: if signedIn()
+          && isCaregiverMember(patientId)
+          && resource.data.patientId == patientId
+          && request.resource.data.patientId == resource.data.patientId
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.caregiverId == resource.data.caregiverId
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            "title_en",
+            "title_vi",
+            "title_id",
+            "content_en",
+            "content_vi",
+            "content_id"
+          ])
+          && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(["title_en"]) || request.resource.data.title_en is string)
+          && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(["title_vi"]) || request.resource.data.title_vi is string)
+          && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(["title_id"]) || request.resource.data.title_id is string)
+          && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(["content_en"]) || request.resource.data.content_en is string)
+          && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(["content_vi"]) || request.resource.data.content_vi is string)
+          && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(["content_id"]) || request.resource.data.content_id is string);
+
         allow delete: if signedIn()
           && isCaregiverMember(patientId)
           && resource.data.patientId == patientId;
       }
 
-      match /daily_checklists/{dateKey}/items/{itemId} {
+      match /daily_checklists/{dailyChecklistDocId} {
         allow read: if signedIn() && isLinkedToPatient(patientId);
 
         allow create: if signedIn()
           && isCaregiverMember(patientId)
           && request.resource.data.keys().hasOnly([
+            "patientId",
+            "patientsId",
+            "dateKey",
+            "dailyChecklistDocId",
+            "createdAt",
+            "updatedAt",
+            "createdBy"
+          ])
+          && request.resource.data.patientId == patientId
+          && request.resource.data.patientsId is string
+          && request.resource.data.dateKey is string
+          && request.resource.data.dateKey.matches("^\\d{4}-\\d{2}-\\d{2}$")
+          && request.resource.data.dailyChecklistDocId == dailyChecklistDocId
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time
+          && request.resource.data.createdBy == request.auth.uid;
+
+        allow update: if signedIn()
+          && isCaregiverMember(patientId)
+          && resource.data.patientId == patientId
+          && resource.data.dailyChecklistDocId == dailyChecklistDocId
+          && request.resource.data.patientId == resource.data.patientId
+          && request.resource.data.dateKey == resource.data.dateKey
+          && request.resource.data.dailyChecklistDocId == resource.data.dailyChecklistDocId
+          && request.resource.data.keys().hasOnly([
+            "patientId",
+            "patientsId",
+            "dateKey",
+            "dailyChecklistDocId",
+            "createdAt",
+            "updatedAt",
+            "createdBy"
+          ])
+          && request.resource.data.patientsId is string
+          && request.resource.data.dateKey is string
+          && request.resource.data.dateKey.matches("^\\d{4}-\\d{2}-\\d{2}$")
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time
+          && request.resource.data.createdBy == request.auth.uid;
+
+        allow delete: if signedIn()
+          && isCaregiverMember(patientId)
+          && resource.data.patientId == patientId
+          && resource.data.dailyChecklistDocId == dailyChecklistDocId;
+
+        match /items/{itemId} {
+          allow read: if signedIn() && isLinkedToPatient(patientId);
+
+          allow create: if signedIn()
+            && isCaregiverMember(patientId)
+            && request.resource.data.keys().hasOnly([
             "title",
             "completed",
             "isDefault",
@@ -199,56 +278,90 @@ service cloud.firestore {
             "createdBy",
             "caregiverId",
             "patientId",
-            "dateKey"
-          ])
-          && request.resource.data.title is string
-          && request.resource.data.completed is bool
-          && request.resource.data.isDefault is bool
-          && request.resource.data.createdAt == request.time
-          && request.resource.data.updatedAt == request.time
-          && (
-            request.resource.data.completedAt == null ||
-            request.resource.data.completedAt == request.time
-          )
-          && request.resource.data.createdBy == request.auth.uid
-          && request.resource.data.caregiverId == request.auth.uid
-          && request.resource.data.patientId == patientId
-          && request.resource.data.dateKey == dateKey;
+            "patientsId",
+            "dateKey",
+            "dailyChecklistDocId"
+            ])
+            && request.resource.data.title is string
+            && request.resource.data.completed is bool
+            && request.resource.data.isDefault is bool
+            && request.resource.data.createdAt == request.time
+            && request.resource.data.updatedAt == request.time
+            && (
+              request.resource.data.completedAt == null ||
+              request.resource.data.completedAt == request.time
+            )
+            && request.resource.data.createdBy == request.auth.uid
+            && request.resource.data.caregiverId == request.auth.uid
+            && request.resource.data.patientId == patientId
+            && request.resource.data.patientsId is string
+            && request.resource.data.dateKey is string
+            && request.resource.data.dateKey.matches("^\\d{4}-\\d{2}-\\d{2}$")
+            && request.resource.data.dailyChecklistDocId == dailyChecklistDocId;
 
-        allow update: if signedIn()
-          && isCaregiverMember(patientId)
-          && resource.data.patientId == patientId
-          && resource.data.dateKey == dateKey
-          && request.resource.data.patientId == resource.data.patientId
-          && request.resource.data.dateKey == resource.data.dateKey
-          && request.resource.data.createdBy == resource.data.createdBy
-          && request.resource.data.createdAt == resource.data.createdAt
-          && request.resource.data.isDefault == resource.data.isDefault
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-            "title",
-            "completed",
-            "completedAt",
-            "caregiverId",
-            "updatedAt"
-          ])
-          && request.resource.data.title is string
-          && request.resource.data.completed is bool
-          && request.resource.data.caregiverId is string
-          && (
-            request.resource.data.caregiverId == resource.data.caregiverId ||
-            request.resource.data.caregiverId == request.auth.uid
-          )
-          && request.resource.data.updatedAt == request.time
+          allow update: if signedIn()
+            && isCaregiverMember(patientId)
+            && resource.data.patientId == patientId
+            && resource.data.dailyChecklistDocId == dailyChecklistDocId
+            && request.resource.data.patientId == resource.data.patientId
+            && request.resource.data.patientsId == resource.data.patientsId
+            && request.resource.data.dateKey == resource.data.dateKey
+            && request.resource.data.dailyChecklistDocId == resource.data.dailyChecklistDocId
+            && request.resource.data.createdBy == resource.data.createdBy
+            && request.resource.data.createdAt == resource.data.createdAt
+            && request.resource.data.isDefault == resource.data.isDefault
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              "title",
+              "title_en",
+              "title_vi",
+              "title_id",
+              "completed",
+              "completedAt",
+              "caregiverId",
+              "updatedAt"
+            ])
+            && request.resource.data.title is string
+            && request.resource.data.completed is bool
+            && request.resource.data.caregiverId is string
+            && request.resource.data.dateKey is string
+            && request.resource.data.dateKey.matches("^\\d{4}-\\d{2}-\\d{2}$")
+            && (
+              request.resource.data.caregiverId == resource.data.caregiverId ||
+              request.resource.data.caregiverId == request.auth.uid
+            )
+            && request.resource.data.updatedAt == request.time
           && (
             request.resource.data.completedAt == null ||
             request.resource.data.completedAt == request.time ||
             request.resource.data.completedAt == resource.data.completedAt
           );
 
-        allow delete: if signedIn()
-          && isCaregiverMember(patientId)
-          && resource.data.patientId == patientId
-          && resource.data.dateKey == dateKey;
+          allow update: if signedIn()
+            && isCaregiverMember(patientId)
+            && resource.data.patientId == patientId
+            && resource.data.dailyChecklistDocId == dailyChecklistDocId
+            && resource.data.isDefault == false
+            && request.resource.data.patientId == resource.data.patientId
+            && request.resource.data.patientsId == resource.data.patientsId
+            && request.resource.data.dateKey == resource.data.dateKey
+            && request.resource.data.dailyChecklistDocId == resource.data.dailyChecklistDocId
+            && request.resource.data.createdBy == resource.data.createdBy
+            && request.resource.data.createdAt == resource.data.createdAt
+            && request.resource.data.isDefault == resource.data.isDefault
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              "title_en",
+              "title_vi",
+              "title_id"
+            ])
+            && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(["title_en"]) || request.resource.data.title_en is string)
+            && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(["title_vi"]) || request.resource.data.title_vi is string)
+            && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(["title_id"]) || request.resource.data.title_id is string);
+
+          allow delete: if signedIn()
+            && isCaregiverMember(patientId)
+            && resource.data.patientId == patientId
+            && resource.data.dailyChecklistDocId == dailyChecklistDocId;
+        }
       }
 }
 
@@ -344,6 +457,54 @@ service cloud.firestore {
         && resource.data.familyId == request.auth.uid;
     }
 
+    match /abnormal_records/{recordId} {
+      allow read: if signedIn()
+        && resource.data.patientId is string
+        && isLinkedToPatient(resource.data.patientId);
+
+      allow create: if signedIn()
+        && request.resource.data.patientId is string
+        && isCaregiverMember(request.resource.data.patientId)
+        && request.resource.data.caregiverId == request.auth.uid;
+
+      allow update: if signedIn()
+        && resource.data.patientId is string
+        && isCaregiverMember(resource.data.patientId)
+        && resource.data.caregiverId == request.auth.uid
+        && request.resource.data.patientId == resource.data.patientId
+        && request.resource.data.caregiverId == resource.data.caregiverId
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "titleOriginal",
+          "titleZh",
+          "title_en",
+          "title_vi",
+          "title_id",
+          "notesOriginal",
+          "notesZh",
+          "notes_en",
+          "notes_vi",
+          "notes_id",
+          "entries",
+          "hasMedia",
+          "mediaUrl",
+          "mediaType",
+          "updatedAt"
+        ])
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(["title_en"]) || request.resource.data.title_en is string)
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(["title_vi"]) || request.resource.data.title_vi is string)
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(["title_id"]) || request.resource.data.title_id is string)
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(["notes_en"]) || request.resource.data.notes_en is string)
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(["notes_vi"]) || request.resource.data.notes_vi is string)
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(["notes_id"]) || request.resource.data.notes_id is string)
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(["entries"]) || request.resource.data.entries is list);
+
+      allow delete: if signedIn()
+        && resource.data.patientId is string
+        && isCaregiverMember(resource.data.patientId)
+        && resource.data.caregiverId == request.auth.uid;
+    }
+
     match /calendar_events/{eventId} {
       allow read: if signedIn()
         && resource.data.patientId is string
@@ -362,12 +523,24 @@ service cloud.firestore {
         && request.resource.data.createdAt == resource.data.createdAt
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           "name",
+          "name_en",
+          "name_vi",
+          "name_id",
           "personName",
           "title",
+          "title_en",
+          "title_vi",
+          "title_id",
           "eventTitle",
           "event",
           "description",
+          "description_en",
+          "description_vi",
+          "description_id",
           "location",
+          "location_en",
+          "location_vi",
+          "location_id",
           "place",
           "color",
           "startAt",

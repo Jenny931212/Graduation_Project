@@ -6,12 +6,19 @@ export function pickLocalizedString(
   language: Language,
   fallback = ""
 ) {
-  return String(
-    raw?.[`${baseName}_${language}`] ??
-      raw?.[`${baseName}_zh`] ??
-      raw?.[baseName] ??
-      fallback
-  );
+  const localized = raw?.[`${baseName}_${language}`];
+  const zh = raw?.[`${baseName}_zh`];
+  const base = raw?.[baseName];
+
+  if (baseName === "drug_name") {
+    return String(localized ?? zh ?? base ?? raw?.drug_name_translated ?? fallback);
+  }
+
+  if (baseName === "note") {
+    return String(localized ?? zh ?? raw?.memo ?? base ?? raw?.note_translated ?? fallback);
+  }
+
+  return String(localized ?? zh ?? base ?? fallback);
 }
 
 export const translations = {
@@ -145,6 +152,16 @@ export const translations = {
     notFoundNotification: "找不到通知。",
     noPermissionNotification: "你沒有權限查看這則通知。",
     notificationReadFailed: "通知讀取失敗。",
+    notificationMedicationReminder: "用藥提醒",
+    notificationAbnormalHealth: "健康異常通知",
+    notificationMedicationDone: "已完成用藥",
+    notificationChatMessage: "新訊息",
+    notificationCalendarEvent: "新增行事曆事件",
+    notificationCalendarEventCompleted: "行事曆事件已完成",
+    notificationCalendarEventCompletedBodySuffix: "已標記為完成。",
+    notificationDailyChecklistCompleted: "每日清單已完成",
+    notificationDailyChecklistCompletedBodySuffix: "已完成",
+    notificationHealthReportMissing: "今日健康紀錄未填寫",
     conditionHint: "點擊列表查看長輩的異常狀況紀錄與追蹤。",
     noConditionRecords: "目前沒有任何異常紀錄",
     trackingFolder: "追蹤資料夾",
@@ -203,6 +220,9 @@ export const translations = {
     preview: "試聽",
     calendarType: "類型",
     calendarLocation: "地點",
+    dailyChecklistDefaultWater: "喝水1500cc",
+    dailyChecklistDefaultExercise: "運動30分鐘",
+    dailyChecklistDefaultCare: "睡前關懷",
     completed: "已完成",
     pending: "未完成",
     name: "姓名",
@@ -431,6 +451,16 @@ export const translations = {
     notFoundNotification: "Notification not found.",
     noPermissionNotification: "You do not have permission to view this notification.",
     notificationReadFailed: "Failed to read notification.",
+    notificationMedicationReminder: "Medication reminder",
+    notificationAbnormalHealth: "Abnormal health alert",
+    notificationMedicationDone: "Medication completed",
+    notificationChatMessage: "New message",
+    notificationCalendarEvent: "New calendar event",
+    notificationCalendarEventCompleted: "Calendar event completed",
+    notificationCalendarEventCompletedBodySuffix: " has been marked as completed.",
+    notificationDailyChecklistCompleted: "Daily checklist completed",
+    notificationDailyChecklistCompletedBodySuffix: " completed",
+    notificationHealthReportMissing: "Today's health record is missing",
     conditionHint: "Tap the list to view abnormal condition records and follow-up.",
     noConditionRecords: "No abnormal records",
     trackingFolder: "Tracking folder",
@@ -489,6 +519,9 @@ export const translations = {
     preview: "Preview",
     calendarType: "Type",
     calendarLocation: "Location",
+    dailyChecklistDefaultWater: "Drink 1500cc water",
+    dailyChecklistDefaultExercise: "Exercise for 30 minutes",
+    dailyChecklistDefaultCare: "Bedtime check-in",
     completed: "Completed",
     pending: "Pending",
     name: "Name",
@@ -717,6 +750,16 @@ export const translations = {
     notFoundNotification: "Không tìm thấy thông báo.",
     noPermissionNotification: "Bạn không có quyền xem thông báo này.",
     notificationReadFailed: "Đọc thông báo thất bại.",
+    notificationMedicationReminder: "Nhắc uống thuốc",
+    notificationAbnormalHealth: "Cảnh báo sức khỏe bất thường",
+    notificationMedicationDone: "Đã hoàn thành uống thuốc",
+    notificationChatMessage: "Tin nhắn mới",
+    notificationCalendarEvent: "Sự kiện lịch mới",
+    notificationCalendarEventCompleted: "Sự kiện lịch đã hoàn thành",
+    notificationCalendarEventCompletedBodySuffix: " đã được đánh dấu hoàn thành.",
+    notificationDailyChecklistCompleted: "Danh sách hằng ngày đã hoàn thành",
+    notificationDailyChecklistCompletedBodySuffix: " đã hoàn thành",
+    notificationHealthReportMissing: "Chưa điền hồ sơ sức khỏe hôm nay",
     conditionHint: "Nhấn vào danh sách để xem hồ sơ bất thường và theo dõi.",
     noConditionRecords: "Hiện chưa có hồ sơ bất thường",
     trackingFolder: "Thư mục theo dõi",
@@ -775,6 +818,9 @@ export const translations = {
     preview: "Nghe thử",
     calendarType: "Loại",
     calendarLocation: "Địa điểm",
+    dailyChecklistDefaultWater: "Uống 1500cc nước",
+    dailyChecklistDefaultExercise: "Tập thể dục 30 phút",
+    dailyChecklistDefaultCare: "Quan tâm trước khi ngủ",
     completed: "Đã hoàn thành",
     pending: "Chưa hoàn thành",
     name: "Tên",
@@ -1003,6 +1049,16 @@ export const translations = {
     notFoundNotification: "Notifikasi tidak ditemukan.",
     noPermissionNotification: "Anda tidak memiliki izin untuk melihat notifikasi ini.",
     notificationReadFailed: "Gagal membaca notifikasi.",
+    notificationMedicationReminder: "Pengingat obat",
+    notificationAbnormalHealth: "Peringatan kesehatan abnormal",
+    notificationMedicationDone: "Obat selesai",
+    notificationChatMessage: "Pesan baru",
+    notificationCalendarEvent: "Acara kalender baru",
+    notificationCalendarEventCompleted: "Acara kalender selesai",
+    notificationCalendarEventCompletedBodySuffix: " telah ditandai selesai.",
+    notificationDailyChecklistCompleted: "Daftar harian selesai",
+    notificationDailyChecklistCompletedBodySuffix: " selesai",
+    notificationHealthReportMissing: "Catatan kesehatan hari ini belum diisi",
     conditionHint: "Ketuk daftar untuk melihat catatan kondisi abnormal dan tindak lanjut.",
     noConditionRecords: "Belum ada catatan abnormal",
     trackingFolder: "Folder pelacakan",
@@ -1061,6 +1117,9 @@ export const translations = {
     preview: "Pratinjau",
     calendarType: "Jenis",
     calendarLocation: "Lokasi",
+    dailyChecklistDefaultWater: "Minum air 1500cc",
+    dailyChecklistDefaultExercise: "Olahraga 30 menit",
+    dailyChecklistDefaultCare: "Perhatian sebelum tidur",
     completed: "Selesai",
     pending: "Belum selesai",
     name: "Nama",
