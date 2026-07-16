@@ -238,14 +238,14 @@ function formatEventDateKey(date: Date) {
   return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
 }
 
-function makeCalendarEventDocId(eventDate: string, patientsId?: string) {
-  const patientSuffix = patientsId?.trim().slice(-4);
+function makeCalendarEventDocId(eventDate: string, activePatientId?: string | null) {
+  const patientSuffix = activePatientId?.trim().slice(-4);
   if (!patientSuffix) return "";
   return `${eventDate}_${patientSuffix}`;
 }
 
-function makeDailyChecklistDocId(dateKey: string, patientsId?: string) {
-  const patientSuffix = patientsId?.trim().slice(-4);
+function makeDailyChecklistDocId(dateKey: string, patientId?: string | null) {
+  const patientSuffix = patientId?.trim().slice(-4);
   if (!patientSuffix) return "";
   return `${dateKey}_${patientSuffix}`;
 }
@@ -458,11 +458,17 @@ export default function CaregiverCalendarScreen() {
   const [dailyChecklistExpanded, setDailyChecklistExpanded] = useState(true);
   const [dailyChecklistInput, setDailyChecklistInput] = useState("");
   const [editingChecklistItemId, setEditingChecklistItemId] = useState<string | null>(null);
+  const [dailyChecklistError, setDailyChecklistError] = useState("");
+  const dailyChecklistInitializationRef = useRef<string | null>(null);
 
   const calendarCells = useMemo(() => getMonthMeta(currentMonth), [currentMonth]);
   const selectedDateKey = useMemo(() => formatEventDateKey(selectedDate), [selectedDate]);
   const activePatientsId = activePatient?.patientsId ?? "";
   const dailyChecklistDocId = useMemo(
+    () => makeDailyChecklistDocId(selectedDateKey, activePatientId),
+    [activePatientId, selectedDateKey]
+  );
+  const legacyPatientsIdChecklistDocId = useMemo(
     () => makeDailyChecklistDocId(selectedDateKey, activePatientsId),
     [activePatientsId, selectedDateKey]
   );
@@ -547,8 +553,9 @@ export default function CaregiverCalendarScreen() {
   }, [activePatientId]);
 
   useEffect(() => {
-    if (!activePatientId || !dailyChecklistDocId || !user?.uid) {
+    if (!activePatientId || !user?.uid) {
       setDailyChecklistItems([]);
+      setDailyChecklistError("");
       return;
     }
 
@@ -567,19 +574,38 @@ export default function CaregiverCalendarScreen() {
       dailyChecklistDocId,
       "items"
     );
-    const oldItemsRef = collection(
-      db,
-      "patients",
-      activePatientId,
-      "daily_checklists",
-      selectedDateKey,
-      "items"
-    );
-
-    let seedingDefaults = false;
-    let migratingLegacyItems = false;
+    const legacyItemRefs = [
+      ...(legacyPatientsIdChecklistDocId &&
+      legacyPatientsIdChecklistDocId !== dailyChecklistDocId
+        ? [
+            collection(
+              db,
+              "patients",
+              activePatientId,
+              "daily_checklists",
+              legacyPatientsIdChecklistDocId,
+              "items"
+            ),
+          ]
+        : []),
+      collection(
+        db,
+        "patients",
+        activePatientId,
+        "daily_checklists",
+        selectedDateKey,
+        "items"
+      ),
+    ];
 
     const ensureDailyChecklistParent = async () => {
+      console.log("daily checklist parent write:", {
+        activePatientId,
+        uid: user.uid,
+        dailyChecklistDocId,
+        parentPath: checklistRef.path,
+        itemsPath: itemsRef.path,
+      });
       await setDoc(
         checklistRef,
         {
@@ -596,12 +622,16 @@ export default function CaregiverCalendarScreen() {
     };
 
     const migrateLegacyItems = async () => {
-      if (migratingLegacyItems) return false;
-      migratingLegacyItems = true;
-
       try {
-        const oldSnap = await getDocs(oldItemsRef);
-        if (oldSnap.empty) return false;
+        let oldSnap = null;
+        for (const legacyItemsRef of legacyItemRefs) {
+          const candidateSnap = await getDocs(legacyItemsRef);
+          if (!candidateSnap.empty) {
+            oldSnap = candidateSnap;
+            break;
+          }
+        }
+        if (!oldSnap) return false;
 
         await ensureDailyChecklistParent();
 
@@ -626,39 +656,49 @@ export default function CaregiverCalendarScreen() {
         await batch.commit();
         return true;
       } catch (error) {
-        console.log("migrate legacy daily checklist failed:", error);
+        const firestoreError = error as { code?: string; message?: string };
+        console.error("migrate legacy daily checklist failed; continuing with defaults:", {
+          code: firestoreError.code,
+          message: firestoreError.message,
+          error,
+        });
         return false;
       }
     };
 
     const createDefaultItems = async () => {
-      if (seedingDefaults) return;
-      seedingDefaults = true;
+      console.log("daily checklist default creation started:", {
+        activePatientId,
+        uid: user.uid,
+        dailyChecklistDocId,
+        parentPath: checklistRef.path,
+        itemsPath: itemsRef.path,
+      });
 
-      try {
-        await ensureDailyChecklistParent();
+      await ensureDailyChecklistParent();
 
-        const batch = writeBatch(db);
-        DEFAULT_DAILY_CHECKLIST_ITEMS.forEach((title, index) => {
-          batch.set(doc(itemsRef, `default-${index + 1}`), {
-              title,
-              completed: false,
-              isDefault: true,
-              createdAt: serverTimestamp(),
-              updatedAt: serverTimestamp(),
-              completedAt: null,
-              createdBy: user.uid,
-              caregiverId: user.uid,
-              patientId: activePatientId,
-              patientsId: activePatientsId,
-              dateKey: selectedDateKey,
-              dailyChecklistDocId,
-            });
+      const batch = writeBatch(db);
+      DEFAULT_DAILY_CHECKLIST_ITEMS.forEach((title, index) => {
+        batch.set(doc(itemsRef, `default-${index + 1}`), {
+          title,
+          completed: false,
+          isDefault: true,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          completedAt: null,
+          createdBy: user.uid,
+          caregiverId: user.uid,
+          patientId: activePatientId,
+          patientsId: activePatientsId,
+          dateKey: selectedDateKey,
+          dailyChecklistDocId,
         });
-        await batch.commit();
-      } catch (error) {
-        console.log("seed daily checklist failed:", error);
-      }
+      });
+      await batch.commit();
+      console.log("daily checklist default writeBatch commit succeeded:", {
+        dailyChecklistDocId,
+        itemsPath: itemsRef.path,
+      });
     };
 
     const unsubscribe = onSnapshot(
@@ -666,15 +706,44 @@ export default function CaregiverCalendarScreen() {
       (snap) => {
         if (snap.empty) {
           setDailyChecklistItems([]);
+          if (dailyChecklistInitializationRef.current === dailyChecklistDocId) return;
+
+          dailyChecklistInitializationRef.current = dailyChecklistDocId;
+          setDailyChecklistError("");
           void (async () => {
-            const migrated = await migrateLegacyItems();
-            if (!migrated) {
-              await createDefaultItems();
+            try {
+              const migrated = await migrateLegacyItems();
+              if (!migrated) {
+                await createDefaultItems();
+              }
+            } catch (error) {
+              const firestoreError = error as { code?: string; message?: string };
+              console.error("seed daily checklist failed:", {
+                activePatientId,
+                uid: user.uid,
+                dailyChecklistDocId,
+                parentPath: checklistRef.path,
+                itemsPath: itemsRef.path,
+                code: firestoreError.code,
+                message: firestoreError.message,
+                error,
+              });
+              setDailyChecklistError(
+                `每日任務建立失敗${firestoreError.code ? `（${firestoreError.code}）` : ""}：${
+                  firestoreError.message ?? "請稍後再試。"
+                }`
+              );
+            } finally {
+              if (dailyChecklistInitializationRef.current === dailyChecklistDocId) {
+                dailyChecklistInitializationRef.current = null;
+              }
             }
           })();
           return;
         }
 
+        dailyChecklistInitializationRef.current = null;
+        setDailyChecklistError("");
         setDailyChecklistItems(
           snap.docs.map((docSnap) => {
             const data = docSnap.data() as Partial<DailyChecklistItem>;
@@ -699,13 +768,27 @@ export default function CaregiverCalendarScreen() {
         );
       },
       (error) => {
-        console.log("daily checklist snapshot failed:", error);
+        console.error("daily checklist snapshot failed:", {
+          code: error.code,
+          message: error.message,
+          error,
+        });
+        setDailyChecklistError(
+          `每日任務讀取失敗${error.code ? `（${error.code}）` : ""}，請稍後再試。`
+        );
         setDailyChecklistItems([]);
       }
     );
 
     return () => unsubscribe();
-  }, [activePatientId, activePatientsId, dailyChecklistDocId, selectedDateKey, user?.uid]);
+  }, [
+    activePatientId,
+    activePatientsId,
+    dailyChecklistDocId,
+    legacyPatientsIdChecklistDocId,
+    selectedDateKey,
+    user?.uid,
+  ]);
 
   useEffect(() => {
     if (!activePatientId || !dailyChecklistDocId || language === "zh") return;
@@ -816,7 +899,7 @@ export default function CaregiverCalendarScreen() {
 
     const startDate = buildEventDate(selectedDate, formHour, formMinute, formPeriod);
     const eventDate = formatEventDateKey(startDate);
-    const calendarEventDocId = makeCalendarEventDocId(eventDate, activePatientsId);
+    const calendarEventDocId = makeCalendarEventDocId(eventDate, activePatientId);
     if (!calendarEventDocId) return;
 
     const eventRef = doc(db, CALENDAR_EVENTS_COLLECTION, calendarEventDocId);
@@ -1198,6 +1281,9 @@ export default function CaregiverCalendarScreen() {
 
             {dailyChecklistExpanded && (
               <View style={styles.dailyChecklistBody}>
+                {dailyChecklistError ? (
+                  <Text style={styles.dailyChecklistErrorText}>{dailyChecklistError}</Text>
+                ) : null}
                 <View style={styles.dailyChecklistInputRow}>
                   <TextInput
                     style={styles.dailyChecklistInput}
@@ -1748,6 +1834,12 @@ const styles = StyleSheet.create({
   },
   dailyChecklistBody: {
     marginTop: 14,
+  },
+  dailyChecklistErrorText: {
+    color: "#B42318",
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 12,
   },
   dailyChecklistInputRow: {
     flexDirection: "row",
