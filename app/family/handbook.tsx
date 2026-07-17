@@ -6,7 +6,7 @@ import { useLanguage } from "@/src/store/LanguageContext";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -57,6 +57,7 @@ export default function FamilyHandbookScreen() {
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
 
   const fields: { key: FormField; label: string; placeholder: string }[] = [
     { key: "dailyRoutine", label: t.dailyRoutine, placeholder: t.dailyRoutinePlaceholder },
@@ -117,7 +118,7 @@ export default function FamilyHandbookScreen() {
   };
 
   const saveHandbook = async () => {
-    if (saving) return;
+    if (savingRef.current) return;
     if (!user) {
       Alert.alert(t.resultErrorTitle, t.resultNotLoggedIn);
       return;
@@ -132,6 +133,7 @@ export default function FamilyHandbookScreen() {
     ) as CareHandbookForm;
 
     try {
+      savingRef.current = true;
       setSaving(true);
       await setDoc(
         doc(db, "patients", activePatientId, "care_handbook", "main"),
@@ -144,11 +146,29 @@ export default function FamilyHandbookScreen() {
         { merge: true }
       );
       setForm(trimmedForm);
-      Alert.alert(t.handbookSavedTitle, t.handbookSavedMessage);
+      Alert.alert(t.handbookSavedTitle, t.handbookSavedMessage, [
+        {
+          text: t.confirm,
+          onPress: () => {
+            Alert.alert(t.handbookNotifyCaregiverTitle, t.handbookNotifyCaregiverMessage, [
+              { text: t.handbookNotifyLater, style: "cancel" },
+              {
+                text: t.handbookGoToChat,
+                onPress: () =>
+                  router.push({
+                    pathname: "/family/chat-room",
+                    params: { patientId: activePatientId },
+                  }),
+              },
+            ]);
+          },
+        },
+      ]);
     } catch (error: unknown) {
       console.error("Failed to save care handbook:", error);
       Alert.alert(t.resultErrorTitle, t.handbookSaveFailed);
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   };
