@@ -1,5 +1,6 @@
 import { auth, db } from "@/firebase/firebaseConfig";
 import { useActiveCareTarget } from "@/src/care-target/useActiveCareTarget";
+import { translations } from "@/src/i18n/translations";
 import { useLanguage } from "@/src/store/LanguageContext";
 import { Ionicons } from "@expo/vector-icons";
 import { Stack, router, useSegments } from "expo-router";
@@ -28,6 +29,7 @@ export default function CaregiverLayout() {
     "health-report",
     "communication-cards",
     "notebook",
+    "handbook",
     "notification-detail",
   ];
   const hideBottomNav = hideBottomNavRoutes.includes(currentPage);
@@ -238,6 +240,16 @@ export default function CaregiverLayout() {
             }}
           >
             <Text style={styles.menuItemText}>記事本</Text>
+          </Pressable>
+
+          <Pressable
+            style={styles.menuItem}
+            onPress={() => {
+              setIsSidebarOpen(false);
+              router.push("/caregiver/handbook" as any);
+            }}
+          >
+            <Text style={styles.menuItemText}>{translations[language].handbook}</Text>
           </Pressable>
 
           <Pressable style={styles.menuItem} onPress={() => Alert.alert("警告", "確定要解除連結嗎？")}>

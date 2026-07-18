@@ -27,6 +27,7 @@ export default function FamilyLayout() {
     "list",
     "condition",
     "voice",
+    "handbook",
     "notification-detail",
   ];
   const hideBottomNav = hideBottomNavRoutes.includes(currentPage);
@@ -160,7 +161,13 @@ export default function FamilyLayout() {
               </Pressable>
             </View>
           </View>
-          <Pressable style={styles.menuItem} onPress={() => Alert.alert(t.prompt, t.manualComingSoon)}>
+          <Pressable
+            style={styles.menuItem}
+            onPress={() => {
+              setIsSidebarOpen(false);
+              router.push("/family/handbook" as any);
+            }}
+          >
             <Text style={styles.menuItemText}>{t.handbook}</Text>
           </Pressable>
           <Pressable style={styles.menuItem} onPress={() => Alert.alert(t.prompt, t.emergencyPhoneComingSoon)}>
