@@ -147,7 +147,14 @@ export default function FamilyHomeScreen() {
 
     return (
       <View style={styles.vitalBlock}>
-        <Text style={styles.vitalTitle}>{title}</Text>
+        <Text
+          style={styles.vitalTitle}
+          numberOfLines={2}
+          adjustsFontSizeToFit
+          minimumFontScale={0.65}
+        >
+          {title}
+        </Text>
         <View style={styles.vitalCardWrap}>
           {/* 上半部：數據區 */}
           <View style={[styles.vitalCardTop, { backgroundColor: colors.top }]}>
@@ -254,13 +261,13 @@ export default function FamilyHomeScreen() {
         {/* 底部三大功能按鈕 */}
         <View style={styles.actionsRow}>
           <Pressable onPress={() => router.push("/family/list")} style={[styles.actionBtn, { backgroundColor: '#F4E770' }]}>
-            <Text style={styles.actionEmoji}>📋</Text><Text style={styles.actionText}>{t.prescriptionRecords}</Text>
+            <Text style={styles.actionEmoji}>📋</Text><Text style={styles.actionText} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.7}>{t.prescriptionRecords}</Text>
           </Pressable>
           <Pressable onPress={() => router.push("/family/condition" as any)} style={[styles.actionBtn, { backgroundColor: '#85C6F9' }]}>
-            <Text style={styles.actionEmoji}>📹</Text><Text style={styles.actionText}>{t.conditionView}</Text>
+            <Text style={styles.actionEmoji}>📹</Text><Text style={styles.actionText} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.7}>{t.conditionView}</Text>
           </Pressable>
           <Pressable onPress={() => router.push("/family/voice")} style={[styles.actionBtn, { backgroundColor: '#85E785' }]}>
-            <Text style={styles.actionEmoji}>🎙️</Text><Text style={styles.actionText}>{t.recordVoice}</Text>
+            <Text style={styles.actionEmoji}>🎙️</Text><Text style={styles.actionText} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.7}>{t.recordVoice}</Text>
           </Pressable>
         </View>
       </ScrollView>
@@ -302,7 +309,18 @@ const styles = StyleSheet.create({
   
   // 獨立的生理數據小方塊
   vitalBlock: { flex: 1, alignItems: "center" },
-  vitalTitle: { fontSize: 18, fontWeight: "bold", color: "#000", letterSpacing: 2, marginBottom: 8 },
+  vitalTitle: {
+    width: "100%",
+    height: 44,
+    fontSize: 18,
+    lineHeight: 21,
+    fontWeight: "bold",
+    color: "#000",
+    letterSpacing: 0.3,
+    marginBottom: 8,
+    textAlign: "center",
+    textAlignVertical: "center",
+  },
   vitalCardWrap: { width: "100%", height: 130, borderRadius: 12, overflow: "hidden", shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 1 },
   
   vitalCardTop: { flex: 1, justifyContent: "center", alignItems: "center", paddingTop: 2 },
@@ -319,5 +337,15 @@ const styles = StyleSheet.create({
   actionsRow: { flexDirection: "row", justifyContent: "space-between", gap: 12, marginHorizontal: 20, marginTop: 20 },
   actionBtn: { flex: 1, aspectRatio: 1, borderRadius: 20, justifyContent: "center", alignItems: "center", shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 2 },
   actionEmoji: { fontSize: 40, marginBottom: 8 },
-  actionText: { fontSize: 15, fontWeight: "bold", color: "#000", letterSpacing: 1 }
+  actionText: {
+    width: "92%",
+    minHeight: 38,
+    fontSize: 15,
+    lineHeight: 19,
+    fontWeight: "bold",
+    color: "#000",
+    letterSpacing: 0.2,
+    textAlign: "center",
+    textAlignVertical: "center",
+  }
 });

@@ -244,10 +244,21 @@ function makeCalendarEventDocId(eventDate: string, patientsId?: string) {
   return `${eventDate}_${patientSuffix}`;
 }
 
-function makeDailyChecklistDocId(dateKey: string, patientsId?: string) {
-  const patientSuffix = patientsId?.trim().slice(-4);
-  if (!patientSuffix) return "";
-  return `${dateKey}_${patientSuffix}`;
+function getPatientStorageId(patientDocId?: string, patientsId?: string) {
+  const docId = patientDocId?.trim() ?? "";
+  const match = docId.match(/(?:^|_)pat_([A-Za-z0-9]+)$/);
+  if (match) return `pat_${match[1]}`;
+  return patientsId?.trim() || docId;
+}
+
+function makeDailyChecklistDocId(
+  dateKey: string,
+  patientDocId?: string,
+  patientsId?: string
+) {
+  const stablePatientId = getPatientStorageId(patientDocId, patientsId);
+  if (!stablePatientId) return "";
+  return `${dateKey}_${stablePatientId}`;
 }
 
 function getDailyChecklistItemTitle(
@@ -463,8 +474,8 @@ export default function CaregiverCalendarScreen() {
   const selectedDateKey = useMemo(() => formatEventDateKey(selectedDate), [selectedDate]);
   const activePatientsId = activePatient?.patientsId ?? "";
   const dailyChecklistDocId = useMemo(
-    () => makeDailyChecklistDocId(selectedDateKey, activePatientsId),
-    [activePatientsId, selectedDateKey]
+    () => makeDailyChecklistDocId(selectedDateKey, activePatientId ?? "", activePatientsId),
+    [activePatientId, activePatientsId, selectedDateKey]
   );
 
   const monthEvents = useMemo(() => {
@@ -552,21 +563,8 @@ export default function CaregiverCalendarScreen() {
       return;
     }
 
-    const checklistRef = doc(
-      db,
-      "patients",
-      activePatientId,
-      "daily_checklists",
-      dailyChecklistDocId
-    );
-    const itemsRef = collection(
-      db,
-      "patients",
-      activePatientId,
-      "daily_checklists",
-      dailyChecklistDocId,
-      "items"
-    );
+    const checklistRef = doc(db, "daily_checklist_items", dailyChecklistDocId);
+    const itemsRef = collection(db, "daily_checklist_items", dailyChecklistDocId, "items");
     const oldItemsRef = collection(
       db,
       "patients",
@@ -661,8 +659,9 @@ export default function CaregiverCalendarScreen() {
       }
     };
 
+    const itemsQuery = query(itemsRef, where("patientId", "==", activePatientId));
     const unsubscribe = onSnapshot(
-      itemsRef,
+      itemsQuery,
       (snap) => {
         if (snap.empty) {
           setDailyChecklistItems([]);
@@ -714,15 +713,7 @@ export default function CaregiverCalendarScreen() {
       if (item.isDefault) return;
 
       void ensureFirestoreTranslations(
-        doc(
-          db,
-          "patients",
-          activePatientId,
-          "daily_checklists",
-          dailyChecklistDocId,
-          "items",
-          item.id
-        ),
+        doc(db, "daily_checklist_items", dailyChecklistDocId, "items", item.id),
         item,
         language,
         [{ baseName: "title", sourceKeys: ["title"] }]
@@ -917,15 +908,7 @@ export default function CaregiverCalendarScreen() {
   const getDailyChecklistItemRef = (itemId: string) => {
     if (!activePatientId || !dailyChecklistDocId) return null;
 
-    return doc(
-      db,
-      "patients",
-      activePatientId,
-      "daily_checklists",
-      dailyChecklistDocId,
-      "items",
-      itemId
-    );
+    return doc(db, "daily_checklist_items", dailyChecklistDocId, "items", itemId);
   };
 
   const saveDailyChecklistInput = async () => {
@@ -948,7 +931,7 @@ export default function CaregiverCalendarScreen() {
         });
       } else {
         await setDoc(
-          doc(db, "patients", activePatientId, "daily_checklists", dailyChecklistDocId),
+        doc(db, "daily_checklist_items", dailyChecklistDocId),
           {
             patientId: activePatientId,
             patientsId: activePatientsId,
@@ -962,14 +945,7 @@ export default function CaregiverCalendarScreen() {
         );
 
         await addDoc(
-          collection(
-            db,
-            "patients",
-            activePatientId,
-            "daily_checklists",
-            dailyChecklistDocId,
-            "items"
-          ),
+          collection(db, "daily_checklist_items", dailyChecklistDocId, "items"),
           {
             title,
             completed: false,

@@ -365,6 +365,68 @@ service cloud.firestore {
       }
 }
 
+    match /care_notes/{noteId} {
+      allow read: if signedIn()
+        && resource.data.caregiverUid == request.auth.uid;
+
+      allow create: if signedIn()
+        && request.resource.data.patientDocId is string
+        && isCaregiverMember(request.resource.data.patientDocId)
+        && request.resource.data.caregiverUid == request.auth.uid
+        && request.resource.data.title is string
+        && request.resource.data.content is string
+        && request.resource.data.isPinned is bool;
+
+      allow update: if signedIn()
+        && resource.data.patientDocId is string
+        && isCaregiverMember(resource.data.patientDocId)
+        && resource.data.caregiverUid == request.auth.uid
+        && request.resource.data.patientDocId == resource.data.patientDocId
+        && request.resource.data.patientId == resource.data.patientId
+        && request.resource.data.caregiverUid == resource.data.caregiverUid
+        && request.resource.data.createdAt == resource.data.createdAt;
+
+      allow delete: if signedIn()
+        && resource.data.patientDocId is string
+        && isCaregiverMember(resource.data.patientDocId)
+        && resource.data.caregiverUid == request.auth.uid;
+    }
+
+    match /daily_checklist_items/{dailyDocId} {
+      allow read: if signedIn()
+        && resource.data.patientId is string
+        && isLinkedToPatient(resource.data.patientId);
+      allow create, update: if signedIn()
+        && request.resource.data.patientId is string
+        && isCaregiverMember(request.resource.data.patientId)
+        && request.resource.data.dailyChecklistDocId == dailyDocId
+        && request.resource.data.createdBy == request.auth.uid;
+      allow delete: if signedIn()
+        && resource.data.patientId is string
+        && isCaregiverMember(resource.data.patientId);
+
+      match /items/{itemId} {
+        allow read: if signedIn()
+          && resource.data.patientId is string
+          && isLinkedToPatient(resource.data.patientId);
+        allow create: if signedIn()
+          && request.resource.data.patientId is string
+          && isCaregiverMember(request.resource.data.patientId)
+          && request.resource.data.dailyChecklistDocId == dailyDocId
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.caregiverId == request.auth.uid;
+        allow update: if signedIn()
+          && resource.data.patientId is string
+          && isCaregiverMember(resource.data.patientId)
+          && request.resource.data.patientId == resource.data.patientId
+          && request.resource.data.dailyChecklistDocId == resource.data.dailyChecklistDocId
+          && request.resource.data.createdBy == resource.data.createdBy;
+        allow delete: if signedIn()
+          && resource.data.patientId is string
+          && isCaregiverMember(resource.data.patientId);
+      }
+    }
+
     match /prescriptions/{prescriptionId} {
       allow read: if signedIn()
         && resource.data.patientId is string
@@ -439,6 +501,11 @@ service cloud.firestore {
 
       allow update, delete: if signedIn()
         && resource.data.caregiverId == request.auth.uid;
+    }
+
+    match /health_thresholds/{patientId} {
+      allow read: if signedIn() && isLinkedToPatient(patientId);
+      allow write: if signedIn() && isFamilyMember(patientId);
     }
 
     match /voice_records/{recordId} {
@@ -568,6 +635,23 @@ service cloud.firestore {
           isFamilyMember(resource.data.patientId)
           || resource.data.createdBy == request.auth.uid
         );
+    }
+
+    match /notifications/{notificationId} {
+      allow read: if signedIn()
+        && resource.data.recipientUid == request.auth.uid;
+
+      allow create: if false;
+
+      allow update: if signedIn()
+        && resource.data.recipientUid == request.auth.uid
+        && request.resource.data.recipientUid == resource.data.recipientUid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "isRead"
+        ])
+        && request.resource.data.isRead is bool;
+
+      allow delete: if false;
     }
 
     match /chats/{patientId}/{document=**} {

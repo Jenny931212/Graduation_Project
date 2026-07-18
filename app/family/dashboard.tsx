@@ -221,6 +221,9 @@ export default function FamilyDashboardScreen() {
             onPress={() => setActiveTab("history")}
           >
             <Text
+              numberOfLines={2}
+              adjustsFontSizeToFit
+              minimumFontScale={0.7}
               style={[
                 styles.tabText,
                 activeTab === "history" ? styles.tabTextActive : styles.tabTextInactive,
@@ -234,6 +237,9 @@ export default function FamilyDashboardScreen() {
             onPress={() => setActiveTab("today")}
           >
             <Text
+              numberOfLines={2}
+              adjustsFontSizeToFit
+              minimumFontScale={0.7}
               style={[
                 styles.tabText,
                 activeTab === "today" ? styles.tabTextActive : styles.tabTextInactive,
@@ -262,6 +268,9 @@ export default function FamilyDashboardScreen() {
                   ]}
                 >
                   <Text
+                    numberOfLines={2}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.65}
                     style={[
                       styles.filterBtnText,
                       chartDataType === type
@@ -320,7 +329,7 @@ export default function FamilyDashboardScreen() {
                   return (
                     <>
                       <View style={[styles.cardHeader, { backgroundColor: colors.top }]}>
-                        <Text style={styles.cardTitle}>{t.temperature}</Text>
+                        <Text style={styles.cardTitle} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.7}>{t.temperature}</Text>
                       </View>
                       <View style={[styles.cardBody, { backgroundColor: colors.bottom }]}>
                         <View style={styles.valueRow}>
@@ -345,7 +354,7 @@ export default function FamilyDashboardScreen() {
                   return (
                     <>
                       <View style={[styles.cardHeader, { backgroundColor: colors.top }]}>
-                        <Text style={styles.cardTitle}>{t.heartRate}</Text>
+                        <Text style={styles.cardTitle} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.7}>{t.heartRate}</Text>
                       </View>
                       <View style={[styles.cardBody, { backgroundColor: colors.bottom }]}>
                         <View style={styles.valueRow}>
@@ -473,7 +482,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   tabButtonActive: { backgroundColor: "#E69A57" },
-  tabText: { fontSize: 24, fontWeight: "bold", letterSpacing: 2 },
+  tabText: { width: "94%", fontSize: 24, lineHeight: 27, fontWeight: "bold", letterSpacing: 0.3, textAlign: "center" },
   tabTextActive: { color: "#000" },
   tabTextInactive: { color: "rgba(0,0,0,0.6)" },
   scrollContent: {
@@ -498,7 +507,7 @@ const styles = StyleSheet.create({
   },
   filterBtnActive: { backgroundColor: "#EAA161", borderColor: "transparent" },
   filterBtnInactive: { backgroundColor: "#FFF", borderColor: "#000" },
-  filterBtnText: { fontSize: 18, fontWeight: "bold" },
+  filterBtnText: { width: "96%", fontSize: 18, lineHeight: 20, fontWeight: "bold", textAlign: "center" },
   filterTextActive: { color: "#000" },
   filterTextInactive: { color: "#000" },
 
@@ -515,10 +524,13 @@ const styles = StyleSheet.create({
   },
   cardHeader: { paddingVertical: 8, alignItems: "center" },
   cardTitle: {
+    width: "96%",
     fontSize: 22,
+    lineHeight: 25,
     fontWeight: "bold",
-    letterSpacing: 2,
+    letterSpacing: 0.3,
     color: "#000",
+    textAlign: "center",
   },
   cardBody: {
     flex: 1,

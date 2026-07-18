@@ -585,7 +585,7 @@ exports.onCalendarEventCompleted = onDocumentUpdated(
 // health_records 新增時，自動判斷是否異常並發通知
 exports.onDailyChecklistItemCompleted = onDocumentUpdated(
   {
-    document: "patients/{patientId}/daily_checklists/{dateKey}/items/{itemId}",
+    document: "daily_checklist_items/{dailyDocId}/items/{itemId}",
     region: "us-central1",
   },
   async (event) => {
@@ -595,7 +595,7 @@ exports.onDailyChecklistItemCompleted = onDocumentUpdated(
 
       const before = change.before.data() || {};
       const after = change.after.data() || {};
-      const patientId = String(event.params.patientId || after.patientId || "");
+      const patientId = String(after.patientId || "");
       const dateKey = String(event.params.dateKey || after.dateKey || "");
       const itemId = String(event.params.itemId || "");
       const beforeCompleted = before.completed === true;

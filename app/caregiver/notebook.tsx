@@ -1,14 +1,16 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import {
-  addDoc,
   collection,
   deleteDoc,
   doc,
   onSnapshot,
+  query,
   serverTimestamp,
+  setDoc,
   Timestamp,
   updateDoc,
+  where,
 } from "firebase/firestore";
 import React, { useEffect, useMemo, useState } from "react";
 import {
@@ -81,6 +83,14 @@ function getNoteTime(note: CareNote) {
   return note.updatedAt?.toMillis?.() ?? note.createdAt?.toMillis?.() ?? 0;
 }
 
+function makeCareNoteId(patientDocId: string) {
+  const now = new Date();
+  const pad2 = (value: number) => String(value).padStart(2, "0");
+  const patientCode = patientDocId.match(/(?:^|_)pat_([A-Za-z0-9]+)$/)?.[1]
+    ?? patientDocId.slice(-4);
+  return `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}_${pad2(now.getHours())}-${pad2(now.getMinutes())}-${pad2(now.getSeconds())}_note_${patientCode}`;
+}
+
 export default function CaregiverNotebookScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
@@ -104,7 +114,7 @@ export default function CaregiverNotebookScreen() {
   useEffect(() => {
     if (!ready) return;
 
-    if (!activePatientId) {
+    if (!activePatientId || !user?.uid) {
       setNotes([]);
       setLoading(false);
       return;
@@ -112,7 +122,11 @@ export default function CaregiverNotebookScreen() {
 
     setLoading(true);
 
-    const notesRef = collection(db, "patients", activePatientId, "care_notes");
+    const notesRef = query(
+      collection(db, "care_notes"),
+      where("patientDocId", "==", activePatientId),
+      where("caregiverUid", "==", user.uid)
+    );
     const unsubscribe = onSnapshot(
       notesRef,
       (snap) => {
@@ -128,12 +142,12 @@ export default function CaregiverNotebookScreen() {
             content_en: data.content_en ?? "",
             content_vi: data.content_vi ?? "",
             content_id: data.content_id ?? "",
-            pinned: data.pinned === true,
+            pinned: (data as any).isPinned === true,
             createdAt: data.createdAt ?? null,
             updatedAt: data.updatedAt ?? null,
-            createdBy: data.createdBy ?? "",
-            caregiverId: data.caregiverId ?? "",
-            patientId: data.patientId ?? activePatientId,
+            createdBy: (data as any).caregiverUid ?? "",
+            caregiverId: (data as any).caregiverUid ?? "",
+            patientId: (data as any).patientDocId ?? activePatientId,
           };
         });
 
@@ -149,14 +163,14 @@ export default function CaregiverNotebookScreen() {
     );
 
     return () => unsubscribe();
-  }, [activePatientId, ready]);
+  }, [activePatientId, ready, user?.uid]);
 
   useEffect(() => {
     if (!activePatientId || language === "zh") return;
 
     notes.forEach((note) => {
       void ensureFirestoreTranslations(
-        doc(db, "patients", activePatientId, "care_notes", note.id),
+        doc(db, "care_notes", note.id),
         note,
         language,
         [
@@ -216,23 +230,29 @@ export default function CaregiverNotebookScreen() {
       setSaving(true);
 
       if (editingNote) {
-        await updateDoc(doc(db, "patients", activePatientId, "care_notes", editingNote.id), {
+        await updateDoc(doc(db, "care_notes", editingNote.id), {
           title,
           content,
-          pinned: form.pinned,
+          isPinned: form.pinned,
+          language,
           updatedAt: serverTimestamp(),
         });
       } else {
-        await addDoc(collection(db, "patients", activePatientId, "care_notes"), {
-          title,
-          content,
-          pinned: form.pinned,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-          createdBy: user.uid,
-          caregiverId: user.uid,
-          patientId: activePatientId,
-        });
+        const noteDocId = makeCareNoteId(activePatientId);
+        await setDoc(
+          doc(db, "care_notes", noteDocId),
+          {
+            patientDocId: activePatientId,
+            patientId: activePatient?.patientsId ?? "",
+            caregiverUid: user.uid,
+            title,
+            content,
+            language,
+            isPinned: form.pinned,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          }
+        );
       }
 
       setModalVisible(false);
@@ -255,7 +275,7 @@ export default function CaregiverNotebookScreen() {
           if (!activePatientId) return;
 
           try {
-            await deleteDoc(doc(db, "patients", activePatientId, "care_notes", note.id));
+            await deleteDoc(doc(db, "care_notes", note.id));
           } catch (error) {
             console.log("delete care note failed:", error);
             Alert.alert("刪除失敗", "無法刪除照護記事，請稍後再試。");
@@ -269,8 +289,8 @@ export default function CaregiverNotebookScreen() {
     if (!activePatientId) return;
 
     try {
-      await updateDoc(doc(db, "patients", activePatientId, "care_notes", note.id), {
-        pinned: !note.pinned,
+      await updateDoc(doc(db, "care_notes", note.id), {
+        isPinned: !note.pinned,
         updatedAt: serverTimestamp(),
       });
     } catch (error) {

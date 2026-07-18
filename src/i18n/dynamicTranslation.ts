@@ -5,7 +5,7 @@ import {
   updateDoc,
 } from "firebase/firestore";
 
-import { translateText } from "@/src/api/analyzePrescription";
+import { translateText, translateTexts } from "@/src/api/analyzePrescription";
 import type { Language } from "@/src/i18n/translations";
 
 export type DynamicTranslationSpec = {
@@ -88,6 +88,8 @@ export async function ensureFirestoreTranslations(
   const updatePayload: Record<string, string> = {};
   const targetLanguage = TARGET_LANGUAGE_NAMES[language];
 
+  const requests: { key: string; text: string; pendingKey: string }[] = [];
+
   for (const spec of specs) {
     const targetKey = `${spec.baseName}_${language}`;
     if (textValue(raw[targetKey])) continue;
@@ -102,18 +104,26 @@ export async function ensureFirestoreTranslations(
     if (pendingTranslationKeys.has(pendingKey)) continue;
 
     pendingTranslationKeys.add(pendingKey);
+    requests.push({ key: targetKey, text: sourceText, pendingKey });
+  }
 
-    try {
-      const result = await translateText(sourceText, targetLanguage);
-      const translatedText = textValue(result.translated_text);
-      if (translatedText) {
-        updatePayload[targetKey] = translatedText;
+  if (requests.length === 0) return {};
+
+  try {
+    const result = await translateTexts(
+      requests.map(({ key, text }) => ({ key, text })),
+      targetLanguage
+    );
+    for (const item of result.translations) {
+      const translatedText = textValue(item.translated_text);
+      if (translatedText && requests.some((request) => request.key === item.key)) {
+        updatePayload[item.key] = translatedText;
       }
-    } catch (error) {
-      console.log("auto translate failed:", error);
-    } finally {
-      pendingTranslationKeys.delete(pendingKey);
     }
+  } catch (error) {
+    console.log("auto batch translate failed:", error);
+  } finally {
+    for (const request of requests) pendingTranslationKeys.delete(request.pendingKey);
   }
 
   if (Object.keys(updatePayload).length > 0) {

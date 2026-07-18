@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -40,6 +40,8 @@ export default function CaregiverChatRoomScreen() {
   const [messages, setMessages] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const chatScrollRef = useRef<ScrollView>(null);
+  const shouldScrollToEndRef = useRef(true);
 
   const { patientId } = useLocalSearchParams<{ patientId: string }>();
   const { activePatientId, activePatient } = useActiveCareTarget();
@@ -83,6 +85,7 @@ export default function CaregiverChatRoomScreen() {
       q,
       (snapshot) => {
         const msgs = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+        shouldScrollToEndRef.current = true;
         setMessages(msgs);
         setLoading(false);
       },
@@ -220,7 +223,12 @@ export default function CaregiverChatRoomScreen() {
       ) : (
         <ScrollView
           contentContainerStyle={styles.chatContainer}
-          ref={(ref) => ref?.scrollToEnd({ animated: true })}
+          ref={chatScrollRef}
+          onContentSizeChange={() => {
+            if (!shouldScrollToEndRef.current) return;
+            shouldScrollToEndRef.current = false;
+            chatScrollRef.current?.scrollToEnd({ animated: messages.length > 1 });
+          }}
         >
           {messages.map((msg) => {
             const isMe = msg.senderId === user?.uid;

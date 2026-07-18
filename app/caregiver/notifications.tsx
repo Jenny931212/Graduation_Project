@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import {
   collection,
   doc,
@@ -90,17 +90,20 @@ export default function CaregiverNotificationsScreen() {
     <View style={styles.container}>
       <View style={styles.header} />
 
-      <ScrollView
+      <FlatList
+        data={notifications}
+        keyExtractor={(item, index) => item.id || `${item.title}-${index}`}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
-      >
-        {notifications.map((item, index) => {
+        initialNumToRender={12}
+        maxToRenderPerBatch={10}
+        windowSize={7}
+        renderItem={({ item }) => {
           const isUnread = item.isRead !== true;
           const { title, body } = getNotificationText(item, t);
 
           return (
             <Pressable
-              key={item.id || `${item.title}-${index}`}
               style={[styles.row, isUnread ? styles.unreadRow : styles.readRow]}
               onPress={() => handleNotificationPress(item)}
             >
@@ -138,8 +141,8 @@ export default function CaregiverNotificationsScreen() {
               </View>
             </Pressable>
           );
-        })}
-      </ScrollView>
+        }}
+      />
     </View>
   );
 }

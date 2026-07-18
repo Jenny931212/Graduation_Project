@@ -361,7 +361,7 @@ export default function CaregiverHomeScreen() {
           style={styles.mainActionButton}
         >
           <Text style={styles.mainActionEmoji}>📷</Text>
-          <Text style={styles.mainActionText}>{t.scanPrescription}</Text>
+          <Text style={styles.mainActionText} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.75}>{t.scanPrescription}</Text>
         </Pressable>
 
         {/* 2x2 功能網格 */}
@@ -372,7 +372,7 @@ export default function CaregiverHomeScreen() {
               style={[styles.gridItem, { backgroundColor: "#F4E770" }]}
             >
               <Text style={styles.gridEmoji}>📋</Text>
-              <Text style={styles.gridText}>{t.viewPrescriptionRecords}</Text>
+              <Text style={styles.gridText} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.7}>{t.viewPrescriptionRecords}</Text>
             </Pressable>
 
             <Pressable
@@ -380,7 +380,7 @@ export default function CaregiverHomeScreen() {
               style={[styles.gridItem, { backgroundColor: "#EEAC6F" }]}
             >
               <Text style={styles.gridEmoji}>🩺</Text>
-              <Text style={styles.gridText}>{t.dailyHealthReport}</Text>
+              <Text style={styles.gridText} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.7}>{t.dailyHealthReport}</Text>
             </Pressable>
           </View>
 
@@ -392,7 +392,7 @@ export default function CaregiverHomeScreen() {
               style={[styles.gridItem, { backgroundColor: "#81E87A" }]}
             >
               <Text style={styles.gridEmoji}>🖼️</Text>
-              <Text style={styles.gridText}>{t.communicationCards}</Text>
+              <Text style={styles.gridText} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.7}>{t.communicationCards}</Text>
             </Pressable>
 
             <Pressable
@@ -400,7 +400,7 @@ export default function CaregiverHomeScreen() {
               style={[styles.gridItem, { backgroundColor: "#7BC6F9" }]}
             >
               <Text style={styles.gridEmoji}>📹</Text>
-              <Text style={styles.gridText}>{t.conditionRecording}</Text>
+              <Text style={styles.gridText} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.7}>{t.conditionRecording}</Text>
             </Pressable>
           </View>
         </View>
@@ -526,10 +526,12 @@ const styles = StyleSheet.create({
     fontSize: 24,
   },
   mainActionText: {
+    flexShrink: 1,
     fontSize: 22,
     fontWeight: "bold",
     color: "#FFF",
-    letterSpacing: 1,
+    letterSpacing: 0.2,
+    textAlign: "center",
   },
   gridContainer: {
     marginHorizontal: 20,
@@ -556,8 +558,14 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   gridText: {
+    width: "92%",
+    minHeight: 40,
     fontSize: 17,
+    lineHeight: 20,
     fontWeight: "bold",
     color: "#000",
+    letterSpacing: 0.2,
+    textAlign: "center",
+    textAlignVertical: "center",
   },
 });

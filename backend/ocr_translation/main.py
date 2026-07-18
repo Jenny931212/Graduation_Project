@@ -1,5 +1,9 @@
 import os
 import io
+import hashlib
+import json
+import sqlite3
+import threading
 import requests
 import PIL.Image
 import pandas as pd
@@ -31,6 +35,54 @@ if not API_KEY:
         "Set it before starting the backend."
     )
 client = genai.Client(api_key=API_KEY)
+
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
+TRANSLATION_MODEL = GEMINI_MODEL
+TRANSLATION_CACHE_VERSION = "v1"
+TRANSLATION_CACHE_PATH = os.getenv(
+    "TRANSLATION_CACHE_PATH",
+    os.path.join(os.path.dirname(__file__), "translation_cache.sqlite3"),
+)
+translation_cache_lock = threading.Lock()
+
+def init_translation_cache() -> None:
+    with sqlite3.connect(TRANSLATION_CACHE_PATH) as conn:
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS translations (
+                cache_key TEXT PRIMARY KEY,
+                source_text TEXT NOT NULL,
+                target_language TEXT NOT NULL,
+                translated_text TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )"""
+        )
+
+def normalize_translation_text(text: str) -> str:
+    return " ".join(text.strip().split())
+
+def translation_cache_key(text: str, target_language: str) -> str:
+    value = f"{TRANSLATION_CACHE_VERSION}\n{target_language.strip().lower()}\n{normalize_translation_text(text)}"
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+def get_cached_translation(text: str, target_language: str) -> Optional[str]:
+    key = translation_cache_key(text, target_language)
+    with translation_cache_lock, sqlite3.connect(TRANSLATION_CACHE_PATH) as conn:
+        row = conn.execute(
+            "SELECT translated_text FROM translations WHERE cache_key = ?", (key,)
+        ).fetchone()
+    return row[0] if row else None
+
+def cache_translation(text: str, target_language: str, translated_text: str) -> None:
+    key = translation_cache_key(text, target_language)
+    with translation_cache_lock, sqlite3.connect(TRANSLATION_CACHE_PATH) as conn:
+        conn.execute(
+            """INSERT OR REPLACE INTO translations
+               (cache_key, source_text, target_language, translated_text)
+               VALUES (?, ?, ?, ?)""",
+            (key, normalize_translation_text(text), target_language, translated_text),
+        )
+
+init_translation_cache()
 
 # ===== 載入藥物外觀資料庫 =====
 
@@ -174,6 +226,28 @@ class TranslationResult(BaseModel):
     target_language: str
     translated_text: str
 
+class BatchTranslationItem(BaseModel):
+    key: str = Field(..., min_length=1, max_length=200)
+    text: str = Field(..., min_length=1, max_length=10000)
+
+class BatchTranslationRequest(BaseModel):
+    items: List[BatchTranslationItem] = Field(..., min_length=1, max_length=100)
+    target_language: str = Field(..., min_length=1, max_length=100)
+
+class BatchTranslationOutput(BaseModel):
+    key: str
+    translated_text: str
+
+class BatchTranslationModelResult(BaseModel):
+    translations: List[BatchTranslationOutput]
+
+class BatchTranslationResponseItem(BatchTranslationOutput):
+    cached: bool
+
+class BatchTranslationResponse(BaseModel):
+    target_language: str
+    translations: List[BatchTranslationResponseItem]
+
 # ===== 藥單 OCR 處理 =====
 
 def process_prescription_with_gemini(img: PIL.Image.Image) -> PrescriptionResponse:
@@ -197,7 +271,7 @@ def process_prescription_with_gemini(img: PIL.Image.Image) -> PrescriptionRespon
 
     try:
         response = client.models.generate_content(
-            model="gemini-2.5-flash-lite",
+            model=GEMINI_MODEL,
             contents=[prompt, img],
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
@@ -243,35 +317,26 @@ def process_translation_with_gemini(text: str, target_language: Optional[str]) -
     - 中文 → 翻成使用者指定的目標語言
     """
 
-    target_hint = target_language if target_language else "（未指定，若來源為中文則請回傳錯誤提示）"
+    if target_language:
+        cached = get_cached_translation(text, target_language)
+        if cached:
+            return TranslationResult(
+                detected_language="cached",
+                target_language=target_language,
+                translated_text=cached,
+            )
+
+    target_hint = target_language if target_language else "Traditional Chinese"
 
     prompt = f"""
-你是一個專業的多語言翻譯 AI，請依照以下規則處理輸入文字：
-
-## 規則
-1. 先偵測輸入文字的語言。
-2. 若輸入語言**不是中文**（包含簡體或繁體）：
-   - 將文字翻譯成**繁體中文**。
-   - target_language 固定填寫 "繁體中文"。
-3. 若輸入語言**是中文**（簡體或繁體）：
-   - 將文字翻譯成指定語言："{target_hint}"。
-   - 若未指定目標語言，translated_text 請填寫 "請提供 target_language 參數以指定翻譯目標語言。"，target_language 填寫 "未指定"。
-
-## 輸出格式（JSON）
-請直接輸出符合以下結構的 JSON，不要加任何說明或 markdown：
-{{
-  "detected_language": "偵測到的語言名稱（例如 English、日本語、한국어）",
-  "target_language": "實際翻譯目標語言名稱",
-  "translated_text": "翻譯後的文字"
-}}
-
-## 輸入文字
-{text}
+Translate the text to {target_hint}. Preserve drug names, dosages, units and numbers.
+Detect the source language. Return only the requested JSON fields.
+Text: {text}
 """
 
     try:
         response = client.models.generate_content(
-            model="gemini-2.5-flash-lite",
+            model=TRANSLATION_MODEL,
             contents=[prompt],
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
@@ -279,11 +344,65 @@ def process_translation_with_gemini(text: str, target_language: Optional[str]) -
             )
         )
 
-        return TranslationResult.model_validate_json(response.text)
+        result = TranslationResult.model_validate_json(response.text)
+        if target_language:
+            cache_translation(text, target_language, result.translated_text)
+        usage = getattr(response, "usage_metadata", None)
+        print(f"[translation_usage] model={TRANSLATION_MODEL} usage={usage}")
+        return result
 
     except Exception as e:
         print(f"Translation Error: {e}")
         raise HTTPException(status_code=500, detail=f"翻譯失敗: {str(e)}")
+
+def process_batch_translation_with_gemini(
+    items: List[BatchTranslationItem], target_language: str
+) -> List[BatchTranslationResponseItem]:
+    results = {}
+    missing = []
+    for item in items:
+        cached = get_cached_translation(item.text, target_language)
+        if cached is not None:
+            results[item.key] = BatchTranslationResponseItem(
+                key=item.key, translated_text=cached, cached=True
+            )
+        else:
+            missing.append(item)
+
+    if missing:
+        payload = [{"key": item.key, "text": item.text} for item in missing]
+        prompt = (
+            f"Translate every item's text from Traditional Chinese to {target_language}. "
+            "Preserve drug names, dosages, units and numbers. Keep each key unchanged. "
+            f"Items: {json.dumps(payload, ensure_ascii=False)}"
+        )
+        response = client.models.generate_content(
+            model=TRANSLATION_MODEL,
+            contents=[prompt],
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_schema=BatchTranslationModelResult,
+                thinking_config=types.ThinkingConfig(thinking_budget=0),
+            ),
+        )
+        parsed = BatchTranslationModelResult.model_validate_json(response.text)
+        source_by_key = {item.key: item.text for item in missing}
+        for translated in parsed.translations:
+            source = source_by_key.get(translated.key)
+            if source is None:
+                continue
+            cache_translation(source, target_language, translated.translated_text)
+            results[translated.key] = BatchTranslationResponseItem(
+                key=translated.key,
+                translated_text=translated.translated_text,
+                cached=False,
+            )
+        usage = getattr(response, "usage_metadata", None)
+        print(
+            f"[translation_usage] model={TRANSLATION_MODEL} items={len(missing)} usage={usage}"
+        )
+
+    return [results[item.key] for item in items if item.key in results]
 
 # ===== API Endpoints =====
 
@@ -359,3 +478,25 @@ def translate_text(data: TranslationRequest):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"翻譯服務發生錯誤: {str(e)}")
+
+@app.post(
+    "/translate/batch",
+    response_model=BatchTranslationResponse,
+    summary="批次翻譯",
+)
+def translate_texts(data: BatchTranslationRequest):
+    """一次翻譯多個已知為繁體中文的欄位，並重用持久快取。"""
+    try:
+        translations = process_batch_translation_with_gemini(
+            data.items, data.target_language
+        )
+        if len(translations) != len(data.items):
+            raise HTTPException(status_code=502, detail="AI 未回傳所有翻譯欄位")
+        return BatchTranslationResponse(
+            target_language=data.target_language,
+            translations=translations,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"批次翻譯服務發生錯誤: {str(e)}")

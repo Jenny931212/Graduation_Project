@@ -12,6 +12,16 @@ export interface TranslationResult {
   translated_text: string;
 }
 
+export interface BatchTranslationItem {
+  key: string;
+  text: string;
+}
+
+export interface BatchTranslationResult {
+  target_language: string;
+  translations: { key: string; translated_text: string; cached: boolean }[];
+}
+
 function getPrescriptionApiBaseUrl() {
   const baseUrl = Constants.expoConfig?.extra?.prescriptionApiBaseUrl;
 
@@ -88,5 +98,36 @@ export async function translateText(
     return JSON.parse(text) as TranslationResult;
   } catch {
     throw new Error(`AI translate returned non-JSON: ${text}`);
+  }
+}
+
+export async function translateTexts(
+  items: BatchTranslationItem[],
+  targetLanguage: string
+): Promise<BatchTranslationResult> {
+  if (items.length === 0) {
+    return { target_language: targetLanguage, translations: [] };
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(`${getPrescriptionApiBaseUrl()}/translate/batch`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ items, target_language: targetLanguage }),
+    });
+  } catch (err: any) {
+    throw new Error(`Network request failed: ${String(err?.message ?? err)}`);
+  }
+
+  const text = await response.text();
+  if (!response.ok) {
+    throw new Error(`AI batch translate failed (${response.status}): ${text}`);
+  }
+
+  try {
+    return JSON.parse(text) as BatchTranslationResult;
+  } catch {
+    throw new Error(`AI batch translate returned non-JSON: ${text}`);
   }
 }

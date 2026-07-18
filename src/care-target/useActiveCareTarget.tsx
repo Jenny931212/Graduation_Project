@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import {
+  createContext,
+  type ReactNode,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   collection,
@@ -23,7 +30,19 @@ export type CareTarget = {
 
 const activeKey = (uid: string) => `careapp_activePatient_v1:${uid}`;
 
-export function useActiveCareTarget() {
+type ActiveCareTargetContextValue = {
+  ready: boolean;
+  hydrating: boolean;
+  activePatientId: string | null;
+  activePatient: CareTarget | null;
+  linkedCareTargets: CareTarget[];
+  setActivePatientId: (id: string) => Promise<void>;
+  clearActivePatient: () => Promise<void>;
+};
+
+const ActiveCareTargetContext = createContext<ActiveCareTargetContextValue | null>(null);
+
+export function ActiveCareTargetProvider({ children }: { children: ReactNode }) {
   const { user, ready } = useAuth();
 
   const [hydrating, setHydrating] = useState(true);
@@ -229,7 +248,7 @@ export function useActiveCareTarget() {
     }
   }
 
-  return {
+  const value = useMemo<ActiveCareTargetContextValue>(() => ({
     ready: !hydrating,
     hydrating,
     activePatientId,
@@ -237,5 +256,19 @@ export function useActiveCareTarget() {
     linkedCareTargets,
     setActivePatientId,
     clearActivePatient,
-  };
+  }), [hydrating, activePatientId, activePatient, linkedCareTargets]);
+
+  return (
+    <ActiveCareTargetContext.Provider value={value}>
+      {children}
+    </ActiveCareTargetContext.Provider>
+  );
+}
+
+export function useActiveCareTarget() {
+  const value = useContext(ActiveCareTargetContext);
+  if (!value) {
+    throw new Error("useActiveCareTarget must be used within ActiveCareTargetProvider");
+  }
+  return value;
 }

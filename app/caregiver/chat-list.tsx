@@ -8,7 +8,7 @@ import {
   Platform,
 } from "react-native";
 import { router } from "expo-router";
-import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
+import { collection, limit, onSnapshot, orderBy, query } from "firebase/firestore";
 import { db } from "@/firebase/firebaseConfig";
 import { useActiveCareTarget } from "@/src/care-target/useActiveCareTarget";
 import { translations } from "@/src/i18n/translations";
@@ -28,7 +28,8 @@ export default function CaregiverChatListScreen() {
 
     const q = query(
       collection(db, "chats", activePatientId, "messages"),
-      orderBy("createdAt", "desc")
+      orderBy("createdAt", "desc"),
+      limit(1)
     );
 
     const unsub = onSnapshot(

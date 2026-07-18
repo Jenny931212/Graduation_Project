@@ -1,6 +1,7 @@
 // app/_layout.tsx
 import { AuthProvider } from "@/src/auth/AuthProvider";
 import { useAuth } from "@/src/auth/useAuth";
+import { ActiveCareTargetProvider } from "@/src/care-target/useActiveCareTarget";
 import { registerForPushToken } from "@/src/notifications/registerForPushToken";
 import { LanguageProvider } from "@/src/store/LanguageContext";
 import { StoreProvider } from "@/src/store/StoreProvider";
@@ -65,7 +66,9 @@ export default function RootLayout() {
     <AuthProvider>
       <LanguageProvider>
         <StoreProvider>
-          <RootLayoutNav />
+          <ActiveCareTargetProvider>
+            <RootLayoutNav />
+          </ActiveCareTargetProvider>
         </StoreProvider>
       </LanguageProvider>
     </AuthProvider>

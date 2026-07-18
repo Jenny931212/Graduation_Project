@@ -208,7 +208,12 @@ export default function CaregiverVoiceScreen() {
                 </View>
                 
                 <View style={styles.titleContainer}>
-                  <Text style={[styles.cardTitle, isPlaying && styles.cardTitlePlaying]}>
+                  <Text
+                    style={[styles.cardTitle, isPlaying && styles.cardTitlePlaying]}
+                    numberOfLines={2}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.7}
+                  >
                     {taskTitles[task.id] ?? task.title}
                   </Text>
                 </View>
@@ -255,7 +260,7 @@ const styles = StyleSheet.create({
   waveContainer: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center', gap: 3, height: 16 },
   waveBar: { width: 3, backgroundColor: '#FFF', borderRadius: 2 },
   
-  titleContainer: { marginTop: 12, marginBottom: 4, width: '100%', alignItems: 'center' },
-  cardTitle: { fontSize: 22, fontWeight: 'bold', color: '#000', letterSpacing: 1 },
+  titleContainer: { marginTop: 12, marginBottom: 4, width: '100%', minHeight: 52, alignItems: 'center', justifyContent: 'center' },
+  cardTitle: { width: '100%', fontSize: 22, lineHeight: 25, fontWeight: 'bold', color: '#000', letterSpacing: 0.2, textAlign: 'center' },
   cardTitlePlaying: { color: '#4A8B46' },
 });

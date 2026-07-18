@@ -139,7 +139,13 @@ export default function CaregiverLayout() {
   return (
     <View style={styles.container}>
       <View style={styles.content}>
-        <Stack screenOptions={{ headerShown: false, gestureEnabled: false }} />
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            gestureEnabled: false,
+            animation: "none",
+          }}
+        />
       </View>
 
       {!hideBottomNav && (
@@ -152,24 +158,24 @@ export default function CaregiverLayout() {
       )}
 
       {!hideBottomNav && (
-        <View style={styles.footerWrapper}>
-          <View style={styles.fabContainer}>
+        <View style={styles.footerWrapper} pointerEvents="box-none">
+          <View style={styles.fabContainer} pointerEvents="box-none">
             <Pressable style={styles.fabButton} onPress={onEmergencyCall}>
               <Text style={styles.fabIcon}>📞</Text>
             </Pressable>
           </View>
 
           <View style={styles.bottomNav}>
-            <Pressable onPress={() => router.navigate("/caregiver" as any)}>
+            <Pressable style={styles.navButton} hitSlop={8} onPress={() => router.navigate("/caregiver" as any)}>
               <Text style={styles.navIcon}>🏠</Text>
             </Pressable>
-            <Pressable onPress={() => router.push("/caregiver/calendar" as any)}>
+            <Pressable style={styles.navButton} hitSlop={8} onPress={() => router.navigate("/caregiver/calendar" as any)}>
               <Text style={[styles.navIcon, { paddingRight: 48 }]}>📅</Text>
             </Pressable>
-            <Pressable onPress={() => router.push("/caregiver/notifications" as any)}>
+            <Pressable style={styles.navButton} hitSlop={8} onPress={() => router.navigate("/caregiver/notifications" as any)}>
               <Text style={[styles.navIcon, { paddingLeft: 48 }]}>🔔</Text>
             </Pressable>
-            <Pressable onPress={() => router.push("/caregiver/chat-list" as any)}>
+            <Pressable style={styles.navButton} hitSlop={8} onPress={() => router.navigate("/caregiver/chat-list" as any)}>
               <Text style={styles.navIcon}>💬</Text>
             </Pressable>
           </View>
@@ -298,6 +304,12 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderColor: "#E5E7EB",
     zIndex: 10,
+  },
+  navButton: {
+    flex: 1,
+    minHeight: 64,
+    justifyContent: "center",
+    alignItems: "center",
   },
   navIcon: { fontSize: 32 },
   overlay: {

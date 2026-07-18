@@ -146,6 +146,9 @@ export default function HealthReportScreen() {
             onPress={() => setActiveTab('today')}
           >
             <Text
+              numberOfLines={2}
+              adjustsFontSizeToFit
+              minimumFontScale={0.7}
               style={[
                 styles.tabText,
                 activeTab === 'today' ? styles.tabTextActive : styles.tabTextInactive,
@@ -159,6 +162,9 @@ export default function HealthReportScreen() {
             onPress={() => setActiveTab('history')}
           >
             <Text
+              numberOfLines={2}
+              adjustsFontSizeToFit
+              minimumFontScale={0.7}
               style={[
                 styles.tabText,
                 activeTab === 'history' ? styles.tabTextActive : styles.tabTextInactive,
@@ -242,6 +248,9 @@ export default function HealthReportScreen() {
                     ]}
                   >
                     <Text
+                      numberOfLines={2}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.65}
                       style={[
                         styles.mealBtnText,
                         mealTime === 'before'
@@ -409,9 +418,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#E59752',
   },
   tabText: {
+    width: '94%',
     fontSize: 22,
+    lineHeight: 25,
     fontWeight: 'bold',
-    letterSpacing: 2,
+    letterSpacing: 0.3,
+    textAlign: 'center',
   },
   tabTextActive: {
     color: '#000',
@@ -438,11 +450,13 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   inputLabel: {
-    fontSize: 24,
+    flexShrink: 1,
+    fontSize: 21,
     fontWeight: 'bold',
     color: '#000',
-    minWidth: 70,
-    letterSpacing: 2,
+    minWidth: 82,
+    maxWidth: 130,
+    letterSpacing: 0.2,
   },
   inputField: {
     flex: 1,
@@ -474,6 +488,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   mealBtn: {
+    flex: 1,
     paddingHorizontal: 20,
     paddingVertical: 8,
     borderRadius: 12,
@@ -490,6 +505,7 @@ const styles = StyleSheet.create({
   mealBtnText: {
     fontSize: 18,
     fontWeight: 'bold',
+    textAlign: 'center',
   },
   mealBtnTextActive: {
     color: '#000',
