@@ -14,12 +14,27 @@ setGlobalOptions({maxInstances: 10});
 initializeApp();
 const db = getFirestore();
 
+// ─────────────────────────────────────────
+// 系統預設閾值
+// ─────────────────────────────────────────
+const DEFAULT_THRESHOLDS = {
+  temperature: {min: 36.0, max: 37.5},
+  heartRate:   {min: 60,   max: 100},
+  systolic:    {min: 90,   max: 140},
+  diastolic:   {min: 60,   max: 90},
+  bloodSugar: {
+    beforeMin: 70, beforeMax: 130,
+    afterMin:  70, afterMax:  180,
+  },
+};
+
+// ─────────────────────────────────────────
+// 時間工具
+// ─────────────────────────────────────────
 function getTaipeiDateString() {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Taipei",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
+    year: "numeric", month: "2-digit", day: "2-digit",
   }).format(new Date());
 }
 
@@ -46,44 +61,28 @@ function getTaipeiDateBounds() {
 function getTaipeiHHMM() {
   const parts = new Intl.DateTimeFormat("en-GB", {
     timeZone: "Asia/Taipei",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
+    hour: "2-digit", minute: "2-digit", hour12: false,
   }).formatToParts(new Date());
-
-  const hour = parts.find((p) => p.type === "hour")?.value ?? "00";
+  const hour   = parts.find((p) => p.type === "hour")?.value   ?? "00";
   const minute = parts.find((p) => p.type === "minute")?.value ?? "00";
   return `${hour}:${minute}`;
 }
 
+// ─────────────────────────────────────────
+// 使用者 / Push Token 工具
+// ─────────────────────────────────────────
 async function getUserDocByUid(uid) {
-  const snap = await db
-    .collection("users")
-    .where("uid", "==", uid)
-    .limit(1)
-    .get();
-
-  if (snap.empty) {
-    return null;
-  }
-
-  if (snap.size > 1) {
-    console.log("[push] duplicated user docs found for uid:", uid);
-  }
-
+  const snap = await db.collection("users").where("uid", "==", uid).limit(1).get();
+  if (snap.empty) return null;
+  if (snap.size > 1) console.log("[push] duplicated user docs for uid:", uid);
   return snap.docs[0];
 }
 
 async function getUserPushTokens(userIds) {
   const tokens = [];
-
   for (const uid of userIds) {
     const userDoc = await getUserDocByUid(uid);
-
-    if (!userDoc) {
-      console.log("[push] user doc not found for uid:", uid);
-      continue;
-    }
+    if (!userDoc) { console.log("[push] user doc not found:", uid); continue; }
 
     const userData = userDoc.data() || {};
     if (userData.pushToken) {
@@ -98,21 +97,15 @@ async function getUserPushTokens(userIds) {
       .where("enabled", "==", true)
       .get();
 
-    deviceSnap.forEach((deviceDoc) => {
-      const data = deviceDoc.data();
-      if (data.expoPushToken) {
-        tokens.push(String(data.expoPushToken));
-      }
+    deviceSnap.forEach((d) => {
+      if (d.data().expoPushToken) tokens.push(String(d.data().expoPushToken));
     });
   }
-
   return [...new Set(tokens)];
 }
 
 async function sendExpoPush(tokens, title, body, data) {
-  if (!tokens.length) {
-    return {success: false, reason: "no_tokens"};
-  }
+  if (!tokens.length) return {success: false, reason: "no_tokens"};
 
   const messages = tokens.map((token) => ({
     to: token,
@@ -124,21 +117,88 @@ async function sendExpoPush(tokens, title, body, data) {
 
   const res = await fetch("https://exp.host/--/api/v2/push/send", {
     method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-    },
+    headers: {Accept: "application/json", "Content-Type": "application/json"},
     body: JSON.stringify(messages),
   });
 
-  const text = await res.text();
+  return {success: true, response: await res.text()};
+}
+
+// ─────────────────────────────────────────
+// 閾值讀取：家屬設定優先，沒設定就用系統預設
+// ─────────────────────────────────────────
+async function getThresholdsForPatient(patientId) {
+  const snap = await db.collection("health_thresholds").doc(patientId).get();
+  if (!snap.exists) return DEFAULT_THRESHOLDS;
+
+  const saved = snap.data();
+
   return {
-    success: res.ok,
-    status: res.status,
-    response: text,
+    temperature: saved.temperature?.enabled
+      ? {min: Number(saved.temperature.min), max: Number(saved.temperature.max)}
+      : DEFAULT_THRESHOLDS.temperature,
+    heartRate: saved.heartRate?.enabled
+      ? {min: Number(saved.heartRate.min), max: Number(saved.heartRate.max)}
+      : DEFAULT_THRESHOLDS.heartRate,
+    systolic: saved.systolic?.enabled
+      ? {min: Number(saved.systolic.min), max: Number(saved.systolic.max)}
+      : DEFAULT_THRESHOLDS.systolic,
+    diastolic: saved.diastolic?.enabled
+      ? {min: Number(saved.diastolic.min), max: Number(saved.diastolic.max)}
+      : DEFAULT_THRESHOLDS.diastolic,
+    bloodSugar: saved.bloodSugar?.enabled
+      ? {
+          beforeMin: Number(saved.bloodSugar.beforeMin),
+          beforeMax: Number(saved.bloodSugar.beforeMax),
+          afterMin:  Number(saved.bloodSugar.afterMin),
+          afterMax:  Number(saved.bloodSugar.afterMax),
+        }
+      : DEFAULT_THRESHOLDS.bloodSugar,
   };
 }
 
+// ─────────────────────────────────────────
+// 醫學固定閾值分級（只管嚴重程度，作為 critical 保底判斷）
+// ─────────────────────────────────────────
+function getTemperatureLevel(value) {
+  if (value >= 39.0 || value < 35.0) return "critical";
+  if (value >= 37.5 || value < 36.0) return "warning";
+  return null;
+}
+
+function getHeartRateLevel(value) {
+  if (value >= 150 || value < 40) return "critical";
+  if (value >= 100 || value < 60) return "warning";
+  return null;
+}
+
+function getSystolicLevel(value) {
+  if (value >= 160 || value < 80) return "critical";
+  if (value >= 140 || value < 90) return "warning";
+  return null;
+}
+
+function getDiastolicLevel(value) {
+  if (value >= 100 || value < 50) return "critical";
+  if (value >= 90  || value < 60) return "warning";
+  return null;
+}
+
+function getBloodSugarLevel(value, type) {
+  const isAfterMeal = type === "飯後" || type === "餐後";
+  if (isAfterMeal) {
+    if (value >= 250 || value < 60) return "critical";
+    if (value >= 180 || value < 70) return "warning";
+  } else {
+    if (value >= 200 || value < 60) return "critical";
+    if (value >= 130 || value < 70) return "warning";
+  }
+  return null;
+}
+
+// ─────────────────────────────────────────
+// 推播 / 通知寫入（唯一入口：writeNotifications）
+// ─────────────────────────────────────────
 async function sendPushForNotification(notificationId, notificationData) {
   const recipientUid = String(notificationData.recipientUid || "");
 
@@ -295,71 +355,51 @@ function getOppositeCalendarRecipientUids(patient, actorUid) {
   return uniqueStrings(recipientUids).filter((uid) => uid !== actorUid);
 }
 
-// 測試用：.../sendTestPush?uid=你的uid
+// ─────────────────────────────────────────
+// 測試用 HTTP endpoint：.../sendTestPush?uid=你的uid
+// ─────────────────────────────────────────
 exports.sendTestPush = onRequest(async (req, res) => {
   try {
     const uid = String(req.query.uid || "");
-
-    if (!uid) {
-      res.status(400).send("Missing uid");
-      return;
-    }
+    if (!uid) { res.status(400).send("Missing uid"); return; }
 
     const tokens = await getUserPushTokens([uid]);
+    if (!tokens.length) { res.status(404).send("No push tokens found"); return; }
 
-    if (!tokens.length) {
-      res.status(404).send("No push tokens found for this user");
-      return;
-    }
-
-    const result = await sendExpoPush(
-      tokens,
-      "測試通知🔥",
-      "你已經成功打通推播系統了",
-      {type: "test_push"}
-    );
-
-    res.status(200).json({
-      ok: true,
-      uid,
-      tokens,
-      result,
-    });
+    const result = await sendExpoPush(tokens, "測試通知🔥", "你已經成功打通推播系統了", {type: "test_push"});
+    res.status(200).json({ok: true, uid, tokens, result});
   } catch (error) {
     console.error("[sendTestPush] error =", error);
     res.status(500).send(String(error));
   }
 });
 
-// 每分鐘檢查一次用藥提醒
+// ─────────────────────────────────────────
+// 每分鐘用藥提醒
+// ─────────────────────────────────────────
 exports.sendMedicationReminders = onSchedule(
-  {
-    schedule: "every 1 minutes",
-    region: "us-central1",
-    timeZone: "Asia/Taipei",
-  },
+  {schedule: "every 1 minutes", region: "us-central1", timeZone: "Asia/Taipei"},
   async () => {
     try {
-      const hhmm = getTaipeiHHMM();
+      const hhmm  = getTaipeiHHMM();
       const today = getTaipeiDateString();
-
       console.log("[medication] now =", hhmm, today);
 
-      const snap = await db
-        .collection("medication_reminders")
+      const snap = await db.collection("medication_reminders")
         .where("enabled", "==", true)
         .where("scheduleTime", "==", hhmm)
         .get();
 
-      console.log("[medication] matched reminders =", snap.size);
+      console.log("[medication] matched =", snap.size);
 
       for (const docSnap of snap.docs) {
         const data = docSnap.data();
+        if (data.lastSentDate === today) { console.log("[medication] already sent:", docSnap.id); continue; }
 
-        if (data.lastSentDate === today) {
-          console.log("[medication] already sent today:", docSnap.id);
-          continue;
-        }
+        const tokens = await getUserPushTokens(
+          Array.isArray(data.notifyUserIds) ? data.notifyUserIds : []
+        );
+        if (!tokens.length) continue;
 
         const notifyUserIds = Array.isArray(data.notifyUserIds) ?
           data.notifyUserIds :
@@ -611,7 +651,7 @@ exports.onDailyChecklistItemCompleted = onDocumentUpdated(
         return;
       }
 
-      const itemTitle = String(after.title || "\u6bcf\u65e5\u6e05\u55ae\u9805\u76ee");
+      const itemTitle = String(after.title || "每日清單項目");
       const caregiverId = String(after.caregiverId || after.createdBy || "");
 
       if (!patientId) {
@@ -641,8 +681,8 @@ exports.onDailyChecklistItemCompleted = onDocumentUpdated(
       }
 
       const patientName = String(patient.name || "");
-      const title = "\u6bcf\u65e5\u6e05\u55ae\u5df2\u5b8c\u6210";
-      const body = patientName + "\u7684\u300c" + itemTitle + "\u300d\u5df2\u5b8c\u6210";
+      const title = "每日清單已完成";
+      const body = patientName + "的「" + itemTitle + "」已完成";
 
       await Promise.all(familyUids.map(async (familyUid) => {
         const notificationData = {
@@ -694,88 +734,127 @@ exports.onDailyChecklistItemCompleted = onDocumentUpdated(
   }
 );
 
+// ─────────────────────────────────────────
+// 健康紀錄新增 → 異常偵測 → 分級推播 → 寫入 notifications
+// ─────────────────────────────────────────
 exports.onHealthRecordCreated = onDocumentCreated(
-  {
-    document: "health_records/{recordId}",
-    region: "us-central1",
-  },
+  {document: "health_records/{recordId}", region: "us-central1"},
   async (event) => {
     try {
       const snap = event.data;
       if (!snap) return;
 
-      const data = snap.data() || {};
-      const recordId = event.params.recordId;
-
+      const data      = snap.data() || {};
+      const recordId  = event.params.recordId;
       const patientId = String(data.patientId || "");
-      if (!patientId) {
-        console.log("[health] missing patientId:", recordId);
+      if (!patientId) { console.log("[health] missing patientId:", recordId); return; }
+
+      // 【第一步】讀取家屬閾值
+      const thresholds = await getThresholdsForPatient(patientId);
+
+      // 【第二步】依家屬自訂範圍（normal／warning）＋醫學固定界線（critical 保底）分級
+      const checks = [
+        {
+          value:    data.temperature != null ? Number(data.temperature) : null,
+          range:    thresholds.temperature,
+          label:    "體溫", unit: "°C",
+          getLevel: (v) => getTemperatureLevel(v),
+        },
+        {
+          value:    data.heartRate != null ? Number(data.heartRate) : null,
+          range:    thresholds.heartRate,
+          label:    "心率", unit: "bpm",
+          getLevel: (v) => getHeartRateLevel(v),
+        },
+        {
+          value:    data.bloodPressureSys != null ? Number(data.bloodPressureSys) : null,
+          range:    thresholds.systolic,
+          label:    "收縮壓", unit: "mmHg",
+          getLevel: (v) => getSystolicLevel(v),
+        },
+        {
+          value:    data.bloodPressureDia != null ? Number(data.bloodPressureDia) : null,
+          range:    thresholds.diastolic,
+          label:    "舒張壓", unit: "mmHg",
+          getLevel: (v) => getDiastolicLevel(v),
+        },
+        ...(data.bloodSugar != null ? [{
+          value:    Number(data.bloodSugar),
+          range:    (data.bloodSugarType === "飯後" || data.bloodSugarType === "餐後")
+            ? {min: thresholds.bloodSugar.afterMin,  max: thresholds.bloodSugar.afterMax}
+            : {min: thresholds.bloodSugar.beforeMin, max: thresholds.bloodSugar.beforeMax},
+          label:    `血糖(${data.bloodSugarType || "空腹"})`,
+          unit:     "mg/dL",
+          getLevel: (v) => getBloodSugarLevel(v, data.bloodSugarType),
+        }] : []),
+      ];
+
+      // 條件：超出家屬設定範圍 OR 醫學上是 critical（後端保底）
+      const abnormals = checks
+        .filter((c) => c.value != null)
+        .filter((c) => {
+          const {min, max} = c.range;
+          const outOfFamilyRange = c.value < min || c.value > max;
+          const medicalLevel = c.getLevel(c.value);
+          return outOfFamilyRange || medicalLevel === "critical";
+        })
+        .map((c) => ({
+          ...c,
+          level: c.getLevel(c.value) ?? "warning",
+        }));
+
+      if (!abnormals.length) {
+        console.log("[health] all normal:", recordId);
         return;
       }
 
-      const temperature = Number(data.temperature ?? 0);
-      const heartRate = Number(data.heartRate ?? 0);
-      const sys = Number(data.bloodPressureSys ?? 0);
-      const dia = Number(data.bloodPressureDia ?? 0);
-      const bloodSugar = Number(data.bloodSugar ?? 0);
+      // 【第三步】任一項 critical → 整筆 critical；否則只要有 warning → 整筆 warning
+      const levelOrder = ["warning", "critical"];
+      const topLevel = abnormals.reduce(
+        (max, cur) => levelOrder.indexOf(cur.level) > levelOrder.indexOf(max) ? cur.level : max,
+        "warning"
+      );
 
-      let abnormalTitle = "健康異常通知";
-      let abnormalBody = "";
+      const LEVEL_META = {
+        warning:  {emoji: "⚠️", label: "健康異常通知"},
+        critical: {emoji: "🚨", label: "緊急健康警告"},
+      };
+      const meta  = LEVEL_META[topLevel];
+      const title = `${meta.emoji} ${meta.label}`;
+      const body  = abnormals.map((a) => `${a.label}：${a.value}${a.unit}`).join("、");
 
-      if (temperature > 38) {
-        abnormalBody = `體溫異常：${temperature}°C`;
-      } else if (heartRate > 120) {
-        abnormalBody = `心率過高：${heartRate} bpm`;
-      } else if (sys > 140 || dia > 90) {
-        abnormalBody = `血壓異常：${sys}/${dia} mmHg`;
-      } else if (bloodSugar > 200) {
-        abnormalBody = `血糖偏高：${bloodSugar} mg/dL`;
-      }
-
-      if (!abnormalBody) {
-        console.log("[health] no abnormal condition:", recordId);
-        return;
-      }
-
+      // 取得通知對象
       const patientSnap = await db.collection("patients").doc(patientId).get();
-      if (!patientSnap.exists) {
-        console.log("[health] patient not found:", patientId);
-        return;
-      }
+      if (!patientSnap.exists) { console.log("[health] patient not found:", patientId); return; }
 
-      const patient = patientSnap.data() || {};
-      const families = Array.isArray(patient.families) ? patient.families : [];
-      const caregivers = Array.isArray(patient.caregivers) ? patient.caregivers : [];
-      const notifyUserIds = [...new Set([...families, ...caregivers])];
+      const patient   = patientSnap.data() || {};
+      const notifyIds = [...new Set([
+        ...(Array.isArray(patient.families)   ? patient.families   : []),
+        ...(Array.isArray(patient.caregivers) ? patient.caregivers : []),
+      ])];
 
-      if (!notifyUserIds.length) {
-        console.log("[health] no linked users:", patientId);
-        return;
-      }
+      if (!notifyIds.length) { console.log("[health] no linked users:", patientId); return; }
 
+      // 【第四步】只透過 writeNotifications() 寫入通知並推播，避免重複發送
       try {
         await writeNotifications({
-          recipientUids: notifyUserIds,
+          recipientUids: notifyIds,
           type: "abnormal_health",
-          title: abnormalTitle,
-          body: abnormalBody,
+          title,
+          body,
           patientId,
           sourceCollection: "health_records",
           sourceId: recordId,
           extra: {
             recordId,
+            level: topLevel,
           },
         });
       } catch (notificationError) {
         console.error("[health] notification write failed:", notificationError);
       }
 
-      console.log("[health] abnormal notification written:", {
-        recordId,
-        patientId,
-        abnormalBody,
-        notifyUserIds,
-      });
+      console.log("[health] abnormal notification written:", {recordId, patientId, topLevel, body, notifyIds});
     } catch (error) {
       console.error("[onHealthRecordCreated] error =", error);
     }

@@ -66,6 +66,33 @@ export default function HealthReportScreen() {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
+  const validateExtremeValues = () => {
+    let errorMsg = '';
+
+    if (formData.temperature) {
+      const value = Number(formData.temperature);
+      if (value < 32 || value > 43) errorMsg += `• ${t.extremeTemperatureRange}\n`;
+    }
+    if (formData.heartRate) {
+      const value = Number(formData.heartRate);
+      if (value < 30 || value > 250) errorMsg += `• ${t.extremeHeartRateRange}\n`;
+    }
+    if (formData.systolic) {
+      const value = Number(formData.systolic);
+      if (value < 50 || value > 250) errorMsg += `• ${t.extremeSystolicRange}\n`;
+    }
+    if (formData.diastolic) {
+      const value = Number(formData.diastolic);
+      if (value < 30 || value > 150) errorMsg += `• ${t.extremeDiastolicRange}\n`;
+    }
+    if (formData.bloodSugar) {
+      const value = Number(formData.bloodSugar);
+      if (value < 20 || value > 1000) errorMsg += `• ${t.extremeBloodSugarRange}\n`;
+    }
+
+    return errorMsg;
+  };
+
   const handleSave = async () => {
     if (!user || !activePatientId) {
       Alert.alert(t.resultErrorTitle, t.noSelectedPatient);
@@ -75,6 +102,15 @@ export default function HealthReportScreen() {
     const hasData = Object.values(formData).some((val) => val.trim() !== '');
     if (!hasData) {
       Alert.alert(t.prompt, t.noVitals);
+      return;
+    }
+
+    const extremeError = validateExtremeValues();
+    if (extremeError) {
+      Alert.alert(
+        t.extremeValueTitle,
+        extremeError + '\n' + t.extremeValueSuffix
+      );
       return;
     }
 
@@ -134,6 +170,7 @@ export default function HealthReportScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.topContainer}>
+        {/* 🌟 拿掉置中標題，恢復原本的寬鬆返回鍵排版 */}
         <View style={styles.headerRow}>
           <Pressable onPress={() => router.back()} style={styles.backButton}>
             <Text style={styles.backButtonText}>← {t.back}</Text>
@@ -176,10 +213,7 @@ export default function HealthReportScreen() {
         </View>
       </View>
 
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {activeTab === 'today' ? (
           <View style={styles.formContainer}>
             <View style={styles.inputRow}>
@@ -344,9 +378,7 @@ export default function HealthReportScreen() {
                   onPress={() => setChartTimeRange(range)}
                   style={[
                     styles.filterBtn,
-                    chartTimeRange === range
-                      ? styles.filterBtnActive
-                      : styles.filterBtnInactive,
+                    chartTimeRange === range ? styles.filterBtnActive : styles.filterBtnInactive,
                   ]}
                 >
                   <Text
