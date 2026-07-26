@@ -4,13 +4,13 @@ import type { NotificationDocument } from "@/src/notifications/notificationSchem
 type TranslationSet = (typeof translations)[keyof typeof translations];
 type NotificationLike = NotificationDocument & Record<string, any>;
 
-function textValue(value: unknown) {
+export function textValue(value: unknown) {
   if (typeof value === "string") return value.trim();
   if (typeof value === "number") return String(value);
   return "";
 }
 
-function pickText(data: NotificationLike | null | undefined, keys: string[]) {
+export function pickText(data: NotificationLike | null | undefined, keys: string[]) {
   if (!data) return "";
 
   for (const key of keys) {
